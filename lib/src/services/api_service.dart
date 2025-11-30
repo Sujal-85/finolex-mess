@@ -4,7 +4,7 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   late Dio _dio;
   final String baseUrl =
-      'http://localhost:3000/api'; // Use 10.0.2.2 for Android emulator
+      'https://finolex-mess.onrender.com/api'; // Use 10.0.2.2 for Android emulator
 
   factory ApiService() {
     return _instance;
@@ -14,8 +14,8 @@ class ApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 3),
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
       ),
     );
 
