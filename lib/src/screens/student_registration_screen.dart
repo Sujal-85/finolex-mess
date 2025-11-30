@@ -1,17 +1,15 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lottie/lottie.dart';
-import '../blocs/auth_bloc.dart';
-import '../blocs/auth_event.dart';
-import '../blocs/auth_state.dart';
+import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/cloudinary_service.dart';
 
 class StudentRegistrationScreen extends StatefulWidget {
   const StudentRegistrationScreen({super.key});
@@ -25,27 +23,27 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
     with TickerProviderStateMixin {
   // Controllers for form fields
   final TextEditingController _fullNameController = TextEditingController();
-  final TextEditingController _collegeIdController = TextEditingController();
-  final TextEditingController _hostelBlockController = TextEditingController();
-  final TextEditingController _roomNumberController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   // Form validation
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  String? _selectedHostelBlock;
-  File? _profileImage;
+  XFile? _profileImage;
   bool _isSubmitting = false;
   bool _showSuccess = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+
+  final AuthService _authService = AuthService();
 
   // Animation controllers
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-
-  // Verification status
-  final VerificationStatus _verificationStatus = VerificationStatus.pending;
 
   @override
   void initState() {
@@ -76,80 +74,120 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _slideController.forward();
       _fadeController.forward();
-
-      // Auto-fill email from AuthBloc
-      final authState = context.read<AuthBloc>().state;
-      if (authState is AuthAuthenticated && authState.email != null) {
-        setState(() {
-          _emailController.text = authState.email!;
-        });
-      }
     });
   }
 
   @override
   void dispose() {
     _fullNameController.dispose();
-    _collegeIdController.dispose();
-    _hostelBlockController.dispose();
-    _roomNumberController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     _slideController.dispose();
     _fadeController.dispose();
     super.dispose();
   }
 
   // Handle form submission
-  void _submitForm() async {
+  Future<void> _submitForm() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isSubmitting = true;
       });
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        String? imageUrl;
+        if (_profileImage != null) {
+          final cloudinary = CloudinaryService();
+          imageUrl = await cloudinary.uploadImage(_profileImage!);
+        }
 
-      setState(() {
-        _isSubmitting = false;
-        _showSuccess = true;
-      });
+        final response = await _authService.signup({
+          'name': _fullNameController.text.trim(),
+          'email': _emailController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'password': _passwordController.text.trim(),
+          'profileImage': imageUrl,
+        });
 
-      // Hide success animation after delay and navigate to home
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) {
+        if (response['success']) {
+          final studentId = response['studentId'];
           setState(() {
-            _showSuccess = false;
+            _isSubmitting = false;
+            _showSuccess = true;
           });
 
-          // Mark registration as completed
-          context.read<AuthBloc>().add(RegistrationCompleted());
-
-          // Navigate to home screen
-          context.go('/home');
+          // Hide success animation after delay and navigate to login
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) {
+              setState(() {
+                _showSuccess = false;
+              });
+              context.go('/login');
+              _showRegistrationSuccessDialog(studentId);
+            }
+          });
+        } else {
+          setState(() {
+            _isSubmitting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response['message'] ?? 'Registration failed.'),
+            ),
+          );
         }
-      });
+      } catch (e) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
     }
   }
 
-  // Handle save draft
-  void _saveDraft() {
-    // Save form data locally
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Draft saved successfully'),
-        backgroundColor: AppColors.success,
+  void _showRegistrationSuccessDialog(String studentId) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Registration Successful'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Your Student ID has been generated:'),
+            const SizedBox(height: 10),
+            Text(
+              studentId,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text('Please use this ID or your email to login.'),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => context.pop(), child: const Text('OK')),
+        ],
       ),
     );
   }
 
   // Handle image selection
-  void _selectImage() {
-    // In a real app, this would open image picker
-    // For now, we'll simulate selecting an image
-    setState(() {
-      _profileImage = File(''); // Placeholder
-    });
+  Future<void> _selectImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        _profileImage = image;
+      });
+    }
   }
 
   // Handle image removal
@@ -172,7 +210,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
                 end: Alignment.bottomCenter,
                 colors: [
                   AppColors.primary,
-                  AppColors.primary.withValues(alpha: 0.8),
+                  AppColors.primary.withOpacity(0.8),
                   AppColors.backgroundLight,
                 ],
                 stops: const [0.0, 0.3, 1.0],
@@ -191,28 +229,53 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
                     opacity: _fadeAnimation,
                     child: Column(
                       children: [
-                        // FAMT Logo
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.surface(context),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.shadowLight,
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
+                        // Back button and FAMT Logo
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Back button
+                            GestureDetector(
+                              onTap: () => context.pop(),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withOpacity(0.2),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_back_ios_new,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
                               ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Icon(
-                              Icons.school,
-                              size: 40,
-                              color: AppColors.primary,
                             ),
-                          ),
+                            // FAMT Logo
+                            Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.surface(context),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.shadowLight,
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  Icons.school,
+                                  size: 40,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                            // Spacer
+                            Container(width: 40),
+                          ],
                         ),
                         const SizedBox(height: 16),
 
@@ -228,7 +291,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
 
                         // Subtitle
                         Text(
-                          'Only for Pre-Verified Students',
+                          'Create your account',
                           style: GoogleFonts.roboto(
                             fontSize: 16,
                             color: Colors.white.withOpacity(0.9),
@@ -256,11 +319,6 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Pre-verification status card
-                              _buildVerificationStatusCard(),
-
-                              const SizedBox(height: 24),
-
                               // Profile image upload
                               _buildProfileImageUpload(),
 
@@ -280,41 +338,6 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
                               ),
 
                               const SizedBox(height: 16),
-
-                              // College ID
-                              _buildNeumorphicTextField(
-                                controller: _collegeIdController,
-                                hint: 'College ID / Roll Number',
-                                icon: Icons.school_outlined,
-                                keyboardType: TextInputType.text,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your college ID';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Hostel Block
-                              _buildHostelBlockDropdown(),
-
-                              const SizedBox(height: 16),
-
-                              // Room Number
-                              _buildNeumorphicTextField(
-                                controller: _roomNumberController,
-                                hint: 'Room Number',
-                                icon: Icons.bedroom_child_outlined,
-                                keyboardType: TextInputType.number,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your room number';
-                                  }
-                                  return null;
-                                },
-                              ),
 
                               const SizedBox(height: 16),
 
@@ -337,15 +360,12 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
 
                               const SizedBox(height: 16),
 
-                              // Email (auto-filled if possible)
+                              // Email
                               _buildNeumorphicTextField(
                                 controller: _emailController,
-                                hint: 'Email (auto-filled if possible)',
+                                hint: 'Email',
                                 icon: Icons.email_outlined,
                                 keyboardType: TextInputType.emailAddress,
-                                enabled: _emailController
-                                    .text
-                                    .isEmpty, // Disable if auto-filled
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
                                     return 'Please enter your email';
@@ -354,6 +374,71 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
                                     r'^[^@]+@[^@]+\.[^@]+',
                                   ).hasMatch(value)) {
                                     return 'Please enter a valid email';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Password
+                              _buildNeumorphicTextField(
+                                controller: _passwordController,
+                                hint: 'Password',
+                                icon: Icons.lock_outline,
+                                obscureText: _obscurePassword,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: AppColors.textSecondaryLight,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscurePassword = !_obscurePassword;
+                                    });
+                                  },
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please enter a password';
+                                  }
+                                  if (value.length < 6) {
+                                    return 'Password must be at least 6 characters';
+                                  }
+                                  return null;
+                                },
+                              ),
+
+                              const SizedBox(height: 16),
+
+                              // Confirm Password
+                              _buildNeumorphicTextField(
+                                controller: _confirmPasswordController,
+                                hint: 'Confirm Password',
+                                icon: Icons.lock_outline,
+                                obscureText: _obscureConfirmPassword,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscureConfirmPassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: AppColors.textSecondaryLight,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _obscureConfirmPassword =
+                                          !_obscureConfirmPassword;
+                                    });
+                                  },
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.isEmpty) {
+                                    return 'Please confirm your password';
+                                  }
+                                  if (value != _passwordController.text) {
+                                    return 'Passwords do not match';
                                   }
                                   return null;
                                 },
@@ -378,13 +463,11 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
           if (_showSuccess)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
+                color: Colors.black.withOpacity(0.3),
                 child: Center(
                   child: SuccessConfetti(
                     onCompleted: () {
-                      setState(() {
-                        _showSuccess = false;
-                      });
+                      // Handled in _submitForm
                     },
                   ),
                 ),
@@ -395,7 +478,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
           if (_isSubmitting)
             Positioned.fill(
               child: Container(
-                color: Colors.black.withValues(alpha: 0.3),
+                color: Colors.black.withOpacity(0.3),
                 child: const Center(child: FamtLoader()),
               ),
             ),
@@ -404,189 +487,82 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
     );
   }
 
-  // Build verification status card
-  Widget _buildVerificationStatusCard() {
-    IconData statusIcon;
-    Color statusColor;
-    String statusText;
-
-    switch (_verificationStatus) {
-      case VerificationStatus.pending:
-        statusIcon = Icons.access_time_outlined;
-        statusColor = AppColors.warning;
-        statusText = 'Pending Verification';
-        break;
-      case VerificationStatus.approved:
-        statusIcon = Icons.check_circle_outline;
-        statusColor = AppColors.success;
-        statusText = 'Approved';
-        break;
-      case VerificationStatus.rejected:
-        statusIcon = Icons.cancel_outlined;
-        statusColor = AppColors.error;
-        statusText = 'Rejected';
-        break;
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: NeumorphicStyle.cardDecoration(
-        context,
-        borderRadius: 20,
-        shadowIntensity: 0.1,
-      ),
-      child: Row(
+  // Build profile image upload widget
+  Widget _buildProfileImageUpload() {
+    return Center(
+      child: Stack(
         children: [
-          Icon(statusIcon, color: statusColor, size: 28),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pre-Verification Status',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondaryLight,
-                  ),
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.surface(context),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.shadowDark.withOpacity(0.1),
+                  offset: const Offset(4, 4),
+                  blurRadius: 10,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  statusText,
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
-                  ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.8),
+                  offset: const Offset(-4, -4),
+                  blurRadius: 10,
                 ),
               ],
             ),
+            child: _profileImage != null
+                ? ClipOval(
+                    child: kIsWeb
+                        ? Image.network(_profileImage!.path, fit: BoxFit.cover)
+                        : Image.file(
+                            File(_profileImage!.path),
+                            fit: BoxFit.cover,
+                          ),
+                  )
+                : Icon(
+                    Icons.person,
+                    size: 50,
+                    color: AppColors.textSecondaryLight,
+                  ),
           ),
-          if (_verificationStatus == VerificationStatus.pending)
-            Icon(
-              Icons.waves,
-              color: AppColors.primary.withOpacity(0.2),
-              size: 40,
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface(context),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.shadowLight,
+                    blurRadius: 8,
+                    offset: const Offset(2, 2),
+                  ),
+                ],
+              ),
+              child: PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.camera_alt,
+                  size: 20,
+                  color: AppColors.primary,
+                ),
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _selectImage();
+                  } else if (value == 'remove') {
+                    _removeImage();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(value: 'remove', child: Text('Remove')),
+                ],
+              ),
             ),
+          ),
         ],
       ),
-    );
-  }
-
-  // Build profile image upload widget
-  Widget _buildProfileImageUpload() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Upload Photo',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary(context),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: Stack(
-            children: [
-              // Profile image or placeholder
-              GestureDetector(
-                onTap: _selectImage,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.surface(context),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.shadowLight,
-                        blurRadius: 12,
-                        offset: const Offset(4, 4),
-                      ),
-                      BoxShadow(
-                        color: Colors.white,
-                        blurRadius: 12,
-                        offset: const Offset(-4, -4),
-                      ),
-                    ],
-                  ),
-                  child: _profileImage != null
-                      ? ClipOval(
-                          // Use platform-appropriate image widget
-                          child: kIsWeb
-                              ? Icon(
-                                  Icons.person,
-                                  size: 50,
-                                  color: AppColors.textSecondaryLight,
-                                )
-                              : Image.file(
-                                  _profileImage!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Icon(
-                                      Icons.person,
-                                      size: 50,
-                                      color: AppColors.textSecondaryLight,
-                                    );
-                                  },
-                                ),
-                        )
-                      : Icon(
-                          Icons.person_outline,
-                          size: 50,
-                          color: AppColors.textSecondaryLight,
-                        ),
-                ),
-              ),
-
-              // Edit/Remove buttons
-              if (_profileImage != null)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface(context),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.shadowLight,
-                          blurRadius: 8,
-                          offset: const Offset(2, 2),
-                        ),
-                      ],
-                    ),
-                    child: PopupMenuButton<String>(
-                      icon: Icon(
-                        Icons.more_vert,
-                        size: 20,
-                        color: AppColors.textSecondaryLight,
-                      ),
-                      onSelected: (value) {
-                        if (value == 'edit') {
-                          _selectImage();
-                        } else if (value == 'remove') {
-                          _removeImage();
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        const PopupMenuItem(
-                          value: 'remove',
-                          child: Text('Remove'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
@@ -598,6 +574,8 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
     TextInputType? keyboardType,
     bool enabled = true,
     String? Function(String?)? validator,
+    bool obscureText = false,
+    Widget? suffixIcon,
   }) {
     return Container(
       decoration: NeumorphicStyle.cardDecoration(
@@ -611,6 +589,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
         keyboardType: keyboardType,
         enabled: enabled,
         validator: validator,
+        obscureText: obscureText,
         style: GoogleFonts.roboto(
           fontSize: 16,
           color: AppColors.textPrimary(context),
@@ -622,73 +601,12 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
             color: AppColors.textSecondaryLight.withOpacity(0.7),
           ),
           prefixIcon: Icon(icon, color: AppColors.primary.withOpacity(0.7)),
+          suffixIcon: suffixIcon,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: 18,
           ),
-        ),
-      ),
-    );
-  }
-
-  // Build hostel block dropdown
-  Widget _buildHostelBlockDropdown() {
-    final hostelBlocks = ['A Block', 'B Block', 'C Block', 'D Block'];
-
-    return Container(
-      decoration: NeumorphicStyle.cardDecoration(
-        context,
-        borderRadius: 20,
-        shadowIntensity: 0.1,
-      ),
-      child: DropdownButtonFormField<String>(
-        initialValue: _selectedHostelBlock,
-        hint: Padding(
-          padding: const EdgeInsets.only(left: 20),
-          child: Row(
-            children: [
-              Icon(
-                Icons.apartment_outlined,
-                color: AppColors.primary.withOpacity(0.7),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Select Hostel Block',
-                style: GoogleFonts.roboto(
-                  fontSize: 16,
-                  color: AppColors.textSecondaryLight.withOpacity(0.7),
-                ),
-              ),
-            ],
-          ),
-        ),
-        items: hostelBlocks.map((String block) {
-          return DropdownMenuItem<String>(
-            value: block,
-            child: Text(
-              block,
-              style: GoogleFonts.roboto(
-                fontSize: 16,
-                color: AppColors.textPrimary(context),
-              ),
-            ),
-          );
-        }).toList(),
-        onChanged: (String? newValue) {
-          setState(() {
-            _selectedHostelBlock = newValue;
-          });
-        },
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please select a hostel block';
-          }
-          return null;
-        },
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         ),
       ),
     );
@@ -709,11 +627,11 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
               borderRadius: 20,
               color: _isSubmitting
                   ? AppColors.textSecondaryLight
-                  : AppColors.accent,
+                  : AppColors.primary,
             ),
             child: Center(
               child: Text(
-                'Submit Registration',
+                'Register',
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -723,36 +641,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
             ),
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // Save draft button
-        GestureDetector(
-          onTap: _saveDraft,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: NeumorphicStyle.cardDecoration(
-              context,
-              borderRadius: 20,
-              shadowIntensity: 0.05,
-            ),
-            child: Center(
-              child: Text(
-                'Save Draft',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textSecondaryLight,
-                ),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }
 }
-
-// Verification status enum
-enum VerificationStatus { pending, approved, rejected }

@@ -9,6 +9,15 @@ import '../screens/history_screen.dart';
 import '../screens/news/news_feed_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/student_registration_screen.dart';
+import '../screens/payment_screen.dart';
+import '../screens/complaints_screen.dart';
+import '../screens/receipt_preview_screen.dart';
+import '../screens/feedback_screen.dart';
+import '../screens/notification_center_screen.dart';
+import '../screens/settings_screen.dart';
+import '../screens/about_screen.dart';
+import '../screens/emergency_support_screen.dart';
+import '../screens/all_receipts_screen.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../theme/animations.dart';
 
@@ -46,6 +55,29 @@ class AppRouter {
         pageBuilder: (context, state) => AppAnimations.transitionPage(
           key: state.pageKey,
           child: const StudentRegistrationScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/payment',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const PaymentScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/complaints',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const ComplaintsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/receipt-preview',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: ReceiptPreviewScreen(
+            receiptData: state.extra as Map<String, dynamic>? ?? {},
+          ),
         ),
       ),
 
@@ -123,6 +155,48 @@ class AppRouter {
             ],
           ),
         ],
+      ),
+      GoRoute(
+        path: '/feedback',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const FeedbackScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const NotificationCenterScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/settings',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const SettingsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/about',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const AboutScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/emergency',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const EmergencySupportScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/all-receipts',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const AllReceiptsScreen(),
+        ),
       ),
     ],
   );

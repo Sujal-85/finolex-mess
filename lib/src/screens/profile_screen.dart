@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/shimmer_effect.dart';
+import '../services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,23 +18,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // Mock user data
-  final UserProfile _userProfile = UserProfile(
-    name: 'John Doe',
-    collegeId: 'FAMT/2023/001',
-    hostelBlock: 'A Block',
-    roomNumber: '101',
-    email: 'john.doe@famt.edu',
-    phone: '+91 98765 43210',
-    gender: 'Male',
-    messType: 'Vegetarian',
-    membershipStatus: 'Active',
-    currentBalance: 1250.75,
-    lastPayment: 500.00,
-    lastPaymentDate: DateTime.now().subtract(const Duration(days: 3)),
-  );
-
-  bool _isLoading = false;
+  final AuthService _authService = AuthService();
+  bool _isLoading = true;
+  UserProfile? _userProfile;
 
   @override
   void initState() {
@@ -48,18 +35,47 @@ class _ProfileScreenState extends State<ProfileScreen>
       curve: Curves.easeOut,
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
-    // Start animations after a small delay
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _animationController.forward();
-    });
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    try {
+      final user = await _authService.getUser();
+      if (user != null) {
+        setState(() {
+          _userProfile = UserProfile(
+            name: user['name'] ?? 'Student',
+            collegeId: user['rollNo'] ?? 'N/A',
+            hostelBlock: 'A Block', // Placeholder
+            roomNumber: '101', // Placeholder
+            email: user['email'] ?? '',
+            phone: user['phone'] ?? '',
+            gender: 'Male', // Placeholder
+            messType: 'Vegetarian', // Placeholder
+            membershipStatus: 'Active', // Placeholder
+            currentBalance: (user['balance'] ?? 0).toDouble(),
+            lastPayment: 500.00, // Placeholder
+            lastPaymentDate: DateTime.now().subtract(const Duration(days: 3)),
+            profileImage: user['profileImage'],
+          );
+          _isLoading = false;
+        });
+        _animationController.forward();
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      // Handle error
+    }
   }
 
   @override
@@ -153,18 +169,14 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           content: Text(
             'Are you sure you want to logout?',
-            style: GoogleFonts.roboto(
-              color: AppColors.textSecondaryLight,
-            ),
+            style: GoogleFonts.roboto(color: AppColors.textSecondaryLight),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: Text(
                 'Cancel',
-                style: GoogleFonts.poppins(
-                  color: AppColors.textSecondaryLight,
-                ),
+                style: GoogleFonts.poppins(color: AppColors.textSecondaryLight),
               ),
             ),
             TextButton(
@@ -235,10 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary,
-            AppColors.primary.withValues(alpha: 0.8),
-          ],
+          colors: [AppColors.primary, AppColors.primary.withValues(alpha: 0.8)],
         ),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -280,11 +289,23 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ],
                     ),
                     child: ClipOval(
-                      child: Icon(
-                        Icons.person,
-                        size: 50,
-                        color: AppColors.primary,
-                      ),
+                      child: _userProfile?.profileImage != null
+                          ? Image.network(
+                              _userProfile!.profileImage!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.person,
+                                  size: 50,
+                                  color: AppColors.primary,
+                                );
+                              },
+                            )
+                          : Icon(
+                              Icons.person,
+                              size: 50,
+                              color: AppColors.primary,
+                            ),
                     ),
                   ),
                   Positioned(
@@ -298,10 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: AppColors.accent,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
+                          border: Border.all(color: Colors.white, width: 2),
                           boxShadow: [
                             BoxShadow(
                               color: AppColors.accent.withValues(alpha: 0.4),
@@ -324,7 +342,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
               // User name
               Text(
-                _userProfile.name,
+                _userProfile?.name ?? '',
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -338,7 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _userProfile.collegeId,
+                    _userProfile?.collegeId ?? '',
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       color: Colors.white.withOpacity(0.9),
@@ -356,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
               // Hostel and room info
               Text(
-                '${_userProfile.hostelBlock}, Room ${_userProfile.roomNumber}',
+                '${_userProfile?.hostelBlock ?? ''}, Room ${_userProfile?.roomNumber ?? ''}',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   color: Colors.white.withOpacity(0.8),
@@ -379,10 +397,10 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Personal Details',
             icon: Icons.person_outline,
             children: [
-              _buildInfoRow('Full Name', _userProfile.name),
-              _buildInfoRow('Email', _userProfile.email),
-              _buildInfoRow('Phone Number', _userProfile.phone),
-              _buildInfoRow('Gender', _userProfile.gender),
+              _buildInfoRow('Full Name', _userProfile?.name ?? ''),
+              _buildInfoRow('Email', _userProfile?.email ?? ''),
+              _buildInfoRow('Phone Number', _userProfile?.phone ?? ''),
+              _buildInfoRow('Gender', _userProfile?.gender ?? ''),
             ],
           ),
           const SizedBox(height: 16),
@@ -392,10 +410,13 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Hostel Details',
             icon: Icons.apartment_outlined,
             children: [
-              _buildInfoRow('Hostel Block', _userProfile.hostelBlock),
-              _buildInfoRow('Room Number', _userProfile.roomNumber),
-              _buildInfoRow('Mess Type', _userProfile.messType),
-              _buildInfoRow('Membership Status', _userProfile.membershipStatus),
+              _buildInfoRow('Hostel Block', _userProfile?.hostelBlock ?? ''),
+              _buildInfoRow('Room Number', _userProfile?.roomNumber ?? ''),
+              _buildInfoRow('Mess Type', _userProfile?.messType ?? ''),
+              _buildInfoRow(
+                'Membership Status',
+                _userProfile?.membershipStatus ?? '',
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -408,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               _buildBalanceRow(),
               _buildInfoRow(
                 'Last Payment',
-                '₹${_userProfile.lastPayment.toStringAsFixed(2)}',
+                '₹${_userProfile?.lastPayment.toStringAsFixed(2) ?? '0.00'}',
               ),
             ],
           ),
@@ -426,10 +447,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       position: _slideAnimation,
       child: Container(
         width: double.infinity,
-        decoration: NeumorphicStyle.cardDecoration(
-          context,
-          borderRadius: 25,
-        ),
+        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
@@ -437,11 +455,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             children: [
               Row(
                 children: [
-                  Icon(
-                    icon,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
+                  Icon(icon, color: AppColors.primary, size: 24),
                   const SizedBox(width: 12),
                   Text(
                     title,
@@ -506,7 +520,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '₹${_userProfile.currentBalance.toStringAsFixed(2)}',
+                '₹${_userProfile?.currentBalance.toStringAsFixed(2) ?? '0.00'}',
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -610,18 +624,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     return GestureDetector(
       onTap: action.onTap,
       child: Container(
-        decoration: NeumorphicStyle.cardDecoration(
-          context,
-          borderRadius: 20,
-        ),
+        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              action.icon,
-              size: 24,
-              color: AppColors.primary,
-            ),
+            Icon(action.icon, size: 24, color: AppColors.primary),
             const SizedBox(height: 8),
             Text(
               action.label,
@@ -660,7 +667,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         trailing: Switch(
           value: true,
           onChanged: (value) {},
-          activeColor: AppColors.primary,
+          activeThumbColor: AppColors.primary,
         ),
         onTap: () {
           // Notification settings
@@ -718,10 +725,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
           border: Border(
-            bottom: BorderSide(
-              color: Color(0xFFE0E0E0),
-              width: 0.5,
-            ),
+            bottom: BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
           ),
         ),
         child: Row(
@@ -772,10 +776,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             child: const Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ShimmerEffect.circular(
-                  width: 100,
-                  height: 100,
-                ),
+                ShimmerEffect.circular(width: 100, height: 100),
                 SizedBox(height: 16),
                 ShimmerEffect.rectangular(
                   height: 24,
@@ -832,10 +833,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       child: const Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          ShimmerEffect.circular(
-                            width: 30,
-                            height: 30,
-                          ),
+                          ShimmerEffect.circular(width: 30, height: 30),
                           SizedBox(height: 8),
                           ShimmerEffect.rectangular(
                             height: 12,
@@ -858,10 +856,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildInfoCardSkeleton() {
     return Container(
       width: double.infinity,
-      decoration: NeumorphicStyle.cardDecoration(
-        context,
-        borderRadius: 25,
-      ),
+      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -913,6 +908,7 @@ class UserProfile {
   final double currentBalance;
   final double lastPayment;
   final DateTime lastPaymentDate;
+  final String? profileImage;
 
   UserProfile({
     required this.name,
@@ -927,6 +923,7 @@ class UserProfile {
     required this.currentBalance,
     required this.lastPayment,
     required this.lastPaymentDate,
+    this.profileImage,
   });
 }
 
@@ -935,11 +932,7 @@ class QuickAction {
   final String label;
   final VoidCallback onTap;
 
-  QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  QuickAction({required this.icon, required this.label, required this.onTap});
 }
 
 class SettingItem {

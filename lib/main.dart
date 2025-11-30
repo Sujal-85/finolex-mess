@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'src/blocs/auth_bloc.dart';
-import 'src/blocs/auth_event.dart';
+import 'package:provider/provider.dart';
 import 'src/blocs/dashboard_bloc.dart';
 import 'src/utils/app_router.dart';
 import 'src/theme/colors.dart';
+import 'src/services/notification_service.dart';
+import 'src/services/settings_service.dart';
+import 'src/services/receipt_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -15,32 +17,36 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
+    return MultiProvider(
       providers: [
-        BlocProvider(create: (context) => AuthBloc()..add(AppStarted())),
-        BlocProvider(create: (context) => DashboardBloc()),
+        ChangeNotifierProvider(create: (context) => NotificationService()),
+        ChangeNotifierProvider(create: (context) => SettingsService()),
+        ChangeNotifierProvider(create: (context) => ReceiptService()),
       ],
-      child: MaterialApp.router(
-        title: 'FAMT Mess App',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: AppColors.primary,
-            brightness: Brightness.light,
+      child: MultiBlocProvider(
+        providers: [BlocProvider(create: (context) => DashboardBloc())],
+        child: MaterialApp.router(
+          title: 'FAMT Mess App',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: AppColors.primary,
+              brightness: Brightness.light,
+            ),
+            scaffoldBackgroundColor: AppColors.backgroundLight,
           ),
-          scaffoldBackgroundColor: AppColors.backgroundLight,
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: AppColors.primary,
-            brightness: Brightness.dark,
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: AppColors.primary,
+              brightness: Brightness.dark,
+            ),
+            scaffoldBackgroundColor: AppColors.backgroundDark,
           ),
-          scaffoldBackgroundColor: AppColors.backgroundDark,
+          themeMode: ThemeMode.system,
+          routerConfig: AppRouter.router,
         ),
-        themeMode: ThemeMode.system,
-        routerConfig: AppRouter.router,
       ),
     );
   }

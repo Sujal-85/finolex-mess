@@ -11,7 +11,8 @@ import '../../widgets/dashboard/menu_card.dart';
 import '../../widgets/dashboard/balance_card.dart';
 import '../../widgets/dashboard/action_card.dart';
 import '../../widgets/dashboard/announcement_card.dart';
-
+import '../../widgets/dashboard/receipts_card.dart';
+import '../../widgets/dashboard/payment_due_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -57,10 +58,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       // Header
                       DashboardHeader(
-                        studentName: 'Student', // Replace with dynamic data
-                        hostelBlock: 'Block A',
-                        roomNumber: '101',
-                        notificationCount: 3,
+                        studentName: state.studentName,
+                        hostelBlock:
+                            'Block A', // Placeholder until backend supports it
+                        roomNumber:
+                            '101', // Placeholder until backend supports it
+                        notificationCount: state.unreadNotifications,
+                        profileImage: state.profileImage,
                         onNotificationTap: () => context.push('/notifications'),
                         onProfileTap: () => context.push('/profile'),
                       ),
@@ -80,8 +84,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                             // Balance Card
                             BalanceCard(
-                              balance: 1500.00, // Replace with dynamic data
+                              balance: state.balance,
                               onAddMoney: () => context.push('/payment'),
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Payment Due Card (Conditional)
+                            PaymentDueCard(
+                              amount: 3500.00,
+                              dueDate: '5th Dec 2023',
+                              onPayNow: () => context.push('/payment'),
                             ),
 
                             const SizedBox(height: 24),
@@ -101,8 +114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       title: 'Payments',
                                       subtitle: 'History & Dues',
                                       icon: Icons.history,
-                                      onTap: () =>
-                                          context.push('/transactions'),
+                                      onTap: () => context.push('/history'),
                                     ),
                                     ActionCard(
                                       title: 'Complaints',
@@ -132,6 +144,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                             const SizedBox(height: 24),
 
+                            const SizedBox(height: 24),
+
                             // Announcements
                             AnnouncementCard(
                               announcement: state.latestAnnouncement,
@@ -153,6 +167,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       floatingActionButton: FloatingActionButton.large(
         onPressed: () {
           // Quick Pay
+          context.push('/payment');
         },
         backgroundColor: AppColors.primary,
         elevation: 10,
