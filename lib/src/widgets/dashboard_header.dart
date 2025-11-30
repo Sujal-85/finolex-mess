@@ -8,6 +8,7 @@ class DashboardHeader extends StatelessWidget {
   final String hostelBlock;
   final String roomNumber;
   final int notificationCount;
+  final String? profileImage;
   final VoidCallback onNotificationTap;
   final VoidCallback onProfileTap;
 
@@ -17,6 +18,7 @@ class DashboardHeader extends StatelessWidget {
     required this.hostelBlock,
     required this.roomNumber,
     required this.notificationCount,
+    this.profileImage,
     required this.onNotificationTap,
     required this.onProfileTap,
   });
@@ -36,10 +38,9 @@ class DashboardHeader extends StatelessWidget {
               child: CircleAvatar(
                 radius: 24,
                 backgroundColor: AppColors.primary.withOpacity(0.1),
-                backgroundImage: const AssetImage(
-                  'assets/images/profile_placeholder.png',
-                ), // Ensure this exists or handle error
-                // child: const Icon(Icons.person, color: AppColors.primary),
+                backgroundImage: profileImage != null
+                    ? NetworkImage(profileImage!) as ImageProvider
+                    : const AssetImage('assets/images/profile_placeholder.png'),
               ),
             ),
           ),

@@ -165,10 +165,15 @@ class _MenuItemCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.surface(context),
               borderRadius: BorderRadius.circular(12),
-              image: DecorationImage(
-                image: AssetImage(item['image']),
-                fit: BoxFit.cover,
-              ),
+              image: item['image'] != null && item['image'].startsWith('http')
+                  ? DecorationImage(
+                      image: NetworkImage(item['image']),
+                      fit: BoxFit.cover,
+                    )
+                  : const DecorationImage(
+                      image: AssetImage('assets/images/thali.png'), // Fallback
+                      fit: BoxFit.cover,
+                    ),
             ),
           ),
           const SizedBox(width: 16),

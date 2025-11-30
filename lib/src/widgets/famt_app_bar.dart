@@ -9,6 +9,8 @@ class FamtAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onProfileTap;
   final int notificationCount;
   final bool showProfile;
+  final bool showBackButton; // New parameter
+  final VoidCallback? onBackTap; // New parameter
 
   const FamtAppBar({
     super.key,
@@ -17,6 +19,9 @@ class FamtAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onProfileTap,
     this.notificationCount = 0,
     this.showProfile = true,
+    this.showBackButton =
+        false, // Default to false to maintain backward compatibility
+    this.onBackTap,
   });
 
   @override
@@ -31,8 +36,30 @@ class FamtAppBar extends StatelessWidget implements PreferredSizeWidget {
       color: AppColors.background(context),
       child: Row(
         children: [
+          // Back button (if enabled)
+          if (showBackButton)
+            GestureDetector(
+              onTap: onBackTap ?? () => Navigator.of(context).pop(),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: NeumorphicStyle.buttonDecoration(
+                  context,
+                  borderRadius: 12,
+                  color: AppColors.surface(context),
+                ),
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+              ),
+            ),
+          if (showBackButton) const SizedBox(width: 16),
+
           // Profile Photo
-          if (showProfile)
+          if (showProfile &&
+              !showBackButton) // Only show profile when no back button
             GestureDetector(
               onTap: onProfileTap,
               child: Container(
@@ -46,7 +73,7 @@ class FamtAppBar extends StatelessWidget implements PreferredSizeWidget {
                 child: const Icon(Icons.person, color: AppColors.primary),
               ),
             ),
-          if (showProfile) const SizedBox(width: 16),
+          if (showProfile && !showBackButton) const SizedBox(width: 16),
 
           // Title
           Expanded(

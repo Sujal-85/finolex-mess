@@ -51,11 +51,16 @@ class _NewsFeedViewState extends State<_NewsFeedView>
 
   @override
   Widget build(BuildContext context) {
+    // Check if we can pop (i.e., if there's a previous route)
+    final canPop = Navigator.of(context).canPop();
+    
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: FamtAppBar(
         title: 'College News',
         showProfile: true,
+        showBackButton: canPop, // Only show back button if we can pop
+        onBackTap: () => context.pop(), // Use GoRouter's pop
         onNotificationTap: () {},
         onProfileTap: () {},
       ),

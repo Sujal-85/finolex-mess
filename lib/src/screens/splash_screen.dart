@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lottie/lottie.dart';
-import '../blocs/auth_bloc.dart';
-import '../blocs/auth_state.dart';
+
+import '../services/auth_service.dart';
 import '../theme/colors.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -20,6 +18,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
   late final Animation<Offset> _slideAnimation;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -57,13 +56,19 @@ class _SplashScreenState extends State<SplashScreen>
     // Auto navigate after animation + small delay
     Future.delayed(const Duration(milliseconds: 3200), () {
       if (!mounted) return;
-      final state = context.read<AuthBloc>().state;
-      if (state is AuthAuthenticated) {
-        context.go('/home');
-      } else {
-        context.go('/onboarding');
-      }
+      _checkLoginStatus();
     });
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final isLoggedIn = await _authService.isLoggedIn();
+    if (!mounted) return;
+
+    if (isLoggedIn) {
+      context.go('/home');
+    } else {
+      context.go('/onboarding');
+    }
   }
 
   @override
@@ -74,165 +79,148 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.primary,
+              AppColors.primary.withValues(alpha: 0.8),
+              AppColors.backgroundLight,
+            ],
+            stops: const [0.0, 0.4, 1.0],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Main Content
+            Center(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Pulsating Glow + Logo
+                      ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 30,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(40),
+                            child: Image.asset(
+                              'assets/images/logo-removebg.png',
+                              width: 180,
+                              height: 180,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
 
-    return BlocListener<AuthBloc, AuthState>(
-      listener: (context, state) {
-        // Early navigation if auth state already known
-        if (state is AuthAuthenticated) {
-          context.go('/home');
-        } else if (state is AuthUnauthenticated) {
-          context.go('/onboarding');
-        }
-      },
-      child: Scaffold(
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-            color: Colors.white,
-          child: Stack(
-            children: [
-              // Animated background waves (subtle)
-              AnimatedOpacity(
-                opacity: 0.15,
-                duration: const Duration(seconds: 4),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Lottie.asset(
-                    'assets/lottie/wave_background.json',
-                    fit: BoxFit.cover,
-                    height: MediaQuery.of(context).size.height * 0.6,
-                    repeat: true,
-                  ),
-                ),
-              ),
+                      const SizedBox(height: 48),
 
-              // Main Content
-              Center(
-                child: AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    return Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Pulsating Glow + Logo
-                        ScaleTransition(
-                          scale: _scaleAnimation,
-                          child: Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.primary.withOpacity(0.4),
-                                  blurRadius: 60,
-                                  spreadRadius: _controller.value * 30,
+                      // Title - Fade + Slide Up
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: SlideTransition(
+                          position: _slideAnimation,
+                          child: Text(
+                            'FAMT Mess App',
+                            style: GoogleFonts.poppins(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: const Color.fromARGB(255, 3, 7, 45),
+                              letterSpacing: 1.2,
+                              shadows: [
+                                Shadow(
+                                  color: const Color.fromARGB(255, 3, 7, 45),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 10,
                                 ),
                               ],
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(40),
-                              child: Image.asset(
-                                'assets/images/logo.png',
-                                width: 250,
-                                height: 250,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
                           ),
                         ),
-
-                        const SizedBox(height: 48),
-
-                        // Title - Fade + Slide Up
-                        FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: SlideTransition(
-                            position: _slideAnimation,
-                            child: Text(
-                              'FAMT Mess App',
-                              style: GoogleFonts.poppins(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                                letterSpacing: 1.2,
-                                shadows: [
-                                  Shadow(
-                                    color: AppColors.primary.withOpacity(0.4),
-                                    offset: const Offset(0, 4),
-                                    blurRadius: 20,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // Subtitle
-                        FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: SlideTransition(
-                            position: _slideAnimation,
-                            child: Text(
-                              'Meals — Managed Smartly',
-                              style: GoogleFonts.roboto(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color:
-                                    AppColors.textSecondaryLight
-                                        .withOpacity(0.9),
-                                letterSpacing: 2,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        // Powered by
-                        FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Text(
-                            'by Prasanna Caterers',
-                            style: GoogleFonts.roboto(
-                              fontSize: 14,
-                              color: AppColors.accent.withOpacity(0.8),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-
-              // Bottom loader (optional elegance)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 60),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SizedBox(
-                      width: 60,
-                      height: 4,
-                      child: LinearProgressIndicator(
-                        backgroundColor: Colors.white24,
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0x00FFFFFF),
-                        ),
-                        value: _controller.value,
-                        borderRadius: BorderRadius.circular(2),
                       ),
+
+                      const SizedBox(height: 12),
+
+                      // Subtitle
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: SlideTransition(
+                          position: _slideAnimation,
+                          child: Text(
+                            'Meals — Managed Smartly',
+                            style: GoogleFonts.roboto(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: const Color.fromARGB(255, 3, 7, 45),
+                              letterSpacing: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // Powered by
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Text(
+                          'by Prasanna Caterers',
+                          style: GoogleFonts.roboto(
+                            fontSize: 14,
+                            color: const Color.fromARGB(255, 3, 7, 45),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
+            // Bottom loader (optional elegance)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 60),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SizedBox(
+                    width: 60,
+                    height: 4,
+                    child: LinearProgressIndicator(
+                      backgroundColor: Colors.white24,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.white,
+                      ),
+                      value: _controller.value,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../services/api_service.dart';
 import 'news_event.dart';
 import 'news_state.dart';
 
@@ -14,48 +15,21 @@ class NewsBloc extends Bloc<NewsEvent, NewsState> {
   ) async {
     emit(state.copyWith(status: NewsStatus.loading));
     try {
-      await Future.delayed(const Duration(seconds: 2)); // Simulate API
+      final api = ApiService();
+      final response = await api.get('/announcements');
+      final List<dynamic> data = response.data;
+      final List<Map<String, dynamic>> newsItems = data.map((item) {
+        return {
+          'id': item['_id'] ?? 'unknown',
+          'title': item['title'] ?? 'No Title',
+          'content': item['description'] ?? 'No Description',
+          'date': item['date'] ?? DateTime.now().toIso8601String(),
+          'image': item['image'],
+          'isImportant': item['type'] == 'urgent',
+        };
+      }).toList();
 
-      final List<Map<String, dynamic>> mockNews = [
-        {
-          'id': '1',
-          'title': 'Diwali Special Lunch',
-          'content':
-              'Join us for a grand feast this Diwali! Special sweets and thali will be served.',
-          'date': '2025-11-01',
-          'image': 'assets/images/diwali.png', // Placeholder
-          'isImportant': true,
-        },
-        {
-          'id': '2',
-          'title': 'Mess Fee Payment Deadline',
-          'content':
-              'Please clear your mess dues for the month of October by 5th Nov to avoid late fees.',
-          'date': '2025-10-28',
-          'image': 'assets/images/payment.png', // Placeholder
-          'isImportant': true,
-        },
-        {
-          'id': '3',
-          'title': 'New Breakfast Menu',
-          'content':
-              'We have introduced Poha and Upma in the breakfast menu based on student feedback.',
-          'date': '2025-10-25',
-          'image': 'assets/images/breakfast.png', // Placeholder
-          'isImportant': false,
-        },
-        {
-          'id': '4',
-          'title': 'Maintenance Notice',
-          'content':
-              'The canteen will be closed for maintenance on Sunday evening from 4 PM to 6 PM.',
-          'date': '2025-10-20',
-          'image': 'assets/images/maintenance.png', // Placeholder
-          'isImportant': false,
-        },
-      ];
-
-      emit(state.copyWith(status: NewsStatus.success, newsItems: mockNews));
+      emit(state.copyWith(status: NewsStatus.success, newsItems: newsItems));
     } catch (e) {
       emit(
         state.copyWith(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../services/payment_service.dart';
+import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 
@@ -23,44 +25,13 @@ class _HistoryScreenState extends State<HistoryScreen>
   String? _selectedPaymentType;
   String? _selectedStatus;
 
-  // Mock transaction data
-  final List<Transaction> _transactions = [
-    Transaction(
-      id: 'TXN001',
-      amount: 150.00,
-      date: DateTime.now().subtract(const Duration(days: 1)),
-      paymentMethod: 'UPI',
-      status: 'Success',
-    ),
-    Transaction(
-      id: 'TXN002',
-      amount: 75.50,
-      date: DateTime.now().subtract(const Duration(days: 2)),
-      paymentMethod: 'Card',
-      status: 'Success',
-    ),
-    Transaction(
-      id: 'TXN003',
-      amount: 200.00,
-      date: DateTime.now().subtract(const Duration(days: 3)),
-      paymentMethod: 'Net Banking',
-      status: 'Pending',
-    ),
-    Transaction(
-      id: 'TXN004',
-      amount: 120.75,
-      date: DateTime.now().subtract(const Duration(days: 5)),
-      paymentMethod: 'UPI',
-      status: 'Failed',
-    ),
-    Transaction(
-      id: 'TXN005',
-      amount: 90.00,
-      date: DateTime.now().subtract(const Duration(days: 7)),
-      paymentMethod: 'Wallet',
-      status: 'Success',
-    ),
-  ];
+  // Services
+  final PaymentService _paymentService = PaymentService();
+  final AuthService _authService = AuthService();
+
+  // Transaction data
+  List<Transaction> _transactions = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -72,6 +43,35 @@ class _HistoryScreenState extends State<HistoryScreen>
     _refreshAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _refreshController, curve: Curves.easeInOut),
     );
+    _fetchTransactions();
+  }
+
+  Future<void> _fetchTransactions() async {
+    try {
+      final user = await _authService.getUser();
+      if (user != null && user['_id'] != null) {
+        final history = await _paymentService.fetchTransactionHistory(
+          user['_id'],
+        );
+        setState(() {
+          _transactions = history
+              .map(
+                (data) => Transaction(
+                  id: data['razorpayOrderId'] ?? 'Unknown',
+                  amount: (data['amount'] ?? 0).toDouble(),
+                  date: DateTime.parse(data['date']),
+                  paymentMethod: 'Online', // Default for Razorpay
+                  status: data['status'] ?? 'Pending',
+                ),
+              )
+              .toList();
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching transactions: $e');
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -172,8 +172,8 @@ class _HistoryScreenState extends State<HistoryScreen>
           _refreshController.forward().then((_) {
             _refreshController.reset();
           });
-          // Simulate refresh
-          await Future.delayed(const Duration(seconds: 1));
+          // Refresh logic
+          await _fetchTransactions();
         },
         child: SingleChildScrollView(
           child: Column(
@@ -194,10 +194,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
-      decoration: NeumorphicStyle.cardDecoration(
-        context,
-        borderRadius: 20,
-      ),
+      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -391,7 +388,9 @@ class _HistoryScreenState extends State<HistoryScreen>
           style: GoogleFonts.poppins(
             fontSize: 14,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-            color: isSelected ? AppColors.primary : AppColors.textSecondaryLight,
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.textSecondaryLight,
           ),
         ),
       ),
@@ -440,6 +439,9 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Widget _buildTransactionList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
     if (_transactions.isEmpty) {
       return _buildEmptyState();
     }
@@ -496,10 +498,7 @@ class _HistoryScreenState extends State<HistoryScreen>
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(16),
-        decoration: NeumorphicStyle.cardDecoration(
-          context,
-          borderRadius: 20,
-        ),
+        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
         child: Column(
           children: [
             Row(
@@ -540,8 +539,9 @@ class _HistoryScreenState extends State<HistoryScreen>
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: _getStatusColor(transaction.status)
-                                  .withOpacity(0.1),
+                              color: _getStatusColor(
+                                transaction.status,
+                              ).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -727,10 +727,7 @@ class ReceiptModal extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: Icon(
-                  Icons.close,
-                  color: AppColors.textSecondaryLight,
-                ),
+                icon: Icon(Icons.close, color: AppColors.textSecondaryLight),
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -746,11 +743,7 @@ class ReceiptModal extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Icon(
-                  Icons.school,
-                  size: 40,
-                  color: AppColors.primary,
-                ),
+                Icon(Icons.school, size: 40, color: AppColors.primary),
                 const SizedBox(height: 8),
                 Text(
                   'FAMT Mess',
@@ -785,9 +778,22 @@ class ReceiptModal extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 _buildDetailRow(context, 'Transaction ID', transaction.id),
-                _buildDetailRow(context, 'Date & Time', DateFormat('MMM dd, yyyy hh:mm a').format(transaction.date)),
-                _buildDetailRow(context, 'Payment Method', transaction.paymentMethod),
-                _buildDetailRow(context, 'Status', transaction.status, isStatus: true),
+                _buildDetailRow(
+                  context,
+                  'Date & Time',
+                  DateFormat('MMM dd, yyyy hh:mm a').format(transaction.date),
+                ),
+                _buildDetailRow(
+                  context,
+                  'Payment Method',
+                  transaction.paymentMethod,
+                ),
+                _buildDetailRow(
+                  context,
+                  'Status',
+                  transaction.status,
+                  isStatus: true,
+                ),
               ],
             ),
           ),
@@ -803,11 +809,7 @@ class ReceiptModal extends StatelessWidget {
                 color: Colors.grey[200],
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(
-                Icons.qr_code,
-                size: 80,
-                color: Colors.grey[600],
-              ),
+              child: Icon(Icons.qr_code, size: 80, color: Colors.grey[600]),
             ),
           ),
           const SizedBox(height: 20),
@@ -818,7 +820,23 @@ class ReceiptModal extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    // Share receipt
+                    // Close the modal bottom sheet first
+                    Navigator.of(context).pop();
+                    // Navigate to receipt preview screen
+                    context.push(
+                      '/receipt-preview',
+                      extra: {
+                        'transactionId': transaction.id,
+                        'amount': transaction.amount,
+                        'dateTime': transaction.date,
+                        'paymentMethod': transaction.paymentMethod,
+                        'referenceId': 'REF1234567890',
+                        'studentName': 'John Doe',
+                        'hostelBlock': 'A',
+                        'roomNumber': '101',
+                        'messType': 'Vegetarian',
+                      },
+                    );
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -843,7 +861,23 @@ class ReceiptModal extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    // Download PDF
+                    // Close the modal bottom sheet first
+                    Navigator.of(context).pop();
+                    // Navigate to receipt preview screen
+                    context.push(
+                      '/receipt-preview',
+                      extra: {
+                        'transactionId': transaction.id,
+                        'amount': transaction.amount,
+                        'dateTime': transaction.date,
+                        'paymentMethod': transaction.paymentMethod,
+                        'referenceId': 'REF1234567890',
+                        'studentName': 'John Doe',
+                        'hostelBlock': 'A',
+                        'roomNumber': '101',
+                        'messType': 'Vegetarian',
+                      },
+                    );
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -872,7 +906,12 @@ class ReceiptModal extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow(BuildContext context, String label, String value, {bool isStatus = false}) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool isStatus = false,
+  }) {
     Color? valueColor;
     if (isStatus) {
       switch (value) {
