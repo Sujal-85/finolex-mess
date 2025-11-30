@@ -11,7 +11,7 @@ import '../../widgets/dashboard/menu_card.dart';
 import '../../widgets/dashboard/balance_card.dart';
 import '../../widgets/dashboard/action_card.dart';
 import '../../widgets/dashboard/announcement_card.dart';
-import '../../widgets/dashboard/receipts_card.dart';
+
 import '../../widgets/dashboard/payment_due_card.dart';
 
 class DashboardScreen extends StatefulWidget {
