@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../blocs/menu/menu_bloc.dart';
@@ -8,7 +9,7 @@ import '../../blocs/menu/menu_state.dart';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
 import '../../widgets/skeletons/menu_skeleton.dart';
-import '../../widgets/famt_app_bar.dart';
+import '../../widgets/profile_style_header.dart';
 
 class MenuScreen extends StatelessWidget {
   const MenuScreen({super.key});
@@ -30,14 +31,22 @@ class _MenuView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      appBar: FamtAppBar(
-        title: 'Weekly Menu',
-        showProfile: false,
-        onNotificationTap: () {},
-        onProfileTap: () {},
-      ),
       body: Column(
         children: [
+          ProfileStyleHeader(
+            title: 'Weekly Menu',
+            showBackButton: true,
+            onBackTap: () => context.go('/home'),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.notifications_outlined,
+                  color: Colors.white,
+                ),
+                onPressed: () {},
+              ),
+            ],
+          ),
           const _DateSelector(),
           Expanded(
             child: BlocBuilder<MenuBloc, MenuState>(

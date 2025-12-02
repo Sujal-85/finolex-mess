@@ -8,6 +8,7 @@ import '../models/receipt_model.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/empty_state.dart';
+import '../widgets/profile_style_header.dart';
 
 class AllReceiptsScreen extends StatefulWidget {
   const AllReceiptsScreen({super.key});
@@ -151,91 +152,37 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen>
       position: _headerSlideAnimation,
       child: FadeTransition(
         opacity: _headerFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppColors.surface(context),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(20),
-              bottomRight: Radius.circular(20),
+        child: ProfileStyleHeader(
+          title: 'My Receipts',
+          subtitle: 'Download past transactions anytime',
+          actions: [
+            GestureDetector(
+              onTap: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Generating PDF...'),
+                    backgroundColor: AppColors.primary,
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                await receiptService.downloadSelectedReceipts();
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.2),
+                ),
+                child: const Icon(
+                  Icons.download_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Back button
-              IconButton(
-                icon: Icon(
-                  Icons.arrow_back_ios_new,
-                  size: 18,
-                  color: AppColors.primary,
-                ),
-                onPressed: () => context.pop(),
-              ),
-
-              // Title
-              Column(
-                children: [
-                  Text(
-                    'My Receipts',
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  Text(
-                    'Download past transactions anytime',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryLight,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Download All button
-              GestureDetector(
-                onTap: () {
-                  receiptService.downloadSelectedReceipts();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Downloading all receipts as ZIP...'),
-                      backgroundColor: AppColors.primary,
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.primary,
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.download_outlined,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            const SizedBox(width: 16),
+          ],
         ),
       ),
     );

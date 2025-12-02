@@ -16,7 +16,7 @@ app.use(cors({
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finolex-canteen', {
+mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_canteen@mess.dqhbzlz.mongodb.net/finolex_canteen?appName=Mess", {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 })
@@ -33,6 +33,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finolex-c
         const studentRoutes = require('./routes/students');
         const userRoutes = require('./routes/users');
         const feedbackRoutes = require('./routes/feedback');
+        const verifyRoutes = require('./routes/verify');
+        const uploadRoutes = require('./routes/upload');
 
         app.use('/api/payments', paymentRoutes);
         app.use('/api/menu', menuRoutes);
@@ -43,6 +45,11 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/finolex-c
         app.use('/api/students', studentRoutes);
         app.use('/api/users', userRoutes);
         app.use('/api/feedback', feedbackRoutes);
+        app.use('/api/verify', verifyRoutes);
+        app.use('/api/upload', uploadRoutes);
+
+        // Serve uploaded files statically
+        app.use('/uploads', express.static('uploads'));
 
         app.get('/', (req, res) => {
             res.send('Finolex Canteen Server is Running');

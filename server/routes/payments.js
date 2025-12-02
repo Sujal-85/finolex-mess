@@ -40,6 +40,30 @@ router.post('/create-order', async (req, res) => {
     }
 });
 
+// Manual UPI Payment
+router.post('/manual-upi', async (req, res) => {
+    try {
+        const { studentId, amount, receiptUrl, upiId } = req.body;
+
+        // Save Transaction
+        const transaction = new Transaction({
+            studentId,
+            amount,
+            status: 'Pending',
+            receiptUrl,
+            paymentMethod: 'UPI_Manual',
+            upiId
+        });
+        await transaction.save();
+
+        // Note: Balance is NOT updated here. It will be updated by admin upon approval.
+
+        res.json({ message: 'Payment submitted for review', status: 'Pending' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // Verify Payment
 router.post('/verify', async (req, res) => {
     try {

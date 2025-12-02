@@ -111,4 +111,136 @@ class AuthService {
     final token = await getToken();
     return token != null;
   }
+
+  // Verification Methods
+  Future<Map<String, dynamic>> sendEmailOtp(String email) async {
+    try {
+      final response = await _apiService.post(
+        '/verify/email/send',
+        data: {'email': email},
+      );
+      return {'success': true, 'message': response.data['message']};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message':
+            e.response?.data['message'] ?? e.message ?? 'Failed to send OTP',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyEmailOtp(String email, String otp) async {
+    try {
+      final response = await _apiService.post(
+        '/verify/email/verify',
+        data: {'email': email, 'otp': otp},
+      );
+      return {'success': true, 'message': response.data['message']};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message':
+            e.response?.data['message'] ?? e.message ?? 'Verification failed',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> sendMobileOtp(String phone) async {
+    try {
+      final response = await _apiService.post(
+        '/verify/mobile/send',
+        data: {'phone': phone},
+      );
+      return {'success': true, 'message': response.data['message']};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message':
+            e.response?.data['message'] ?? e.message ?? 'Failed to send OTP',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyMobileOtp(String phone, String otp) async {
+    try {
+      final response = await _apiService.post(
+        '/verify/mobile/verify',
+        data: {'phone': phone, 'otp': otp},
+      );
+      return {'success': true, 'message': response.data['message']};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message':
+            e.response?.data['message'] ?? e.message ?? 'Verification failed',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> updateProfile(
+    String rollNo,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await _apiService.put('/students/$rollNo', data: data);
+      if (response.statusCode == 200) {
+        // Update local storage
+        final user = response.data['student'];
+        if (user['_id'] != null) user['id'] = user['_id'];
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_userKey, jsonEncode(user));
+
+        return {
+          'success': true,
+          'message': 'Profile updated successfully',
+          'user': user,
+        };
+      }
+      return {'success': false, 'message': 'Failed to update profile'};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data['message'] ?? e.message ?? 'Update failed',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> changePassword(
+    String rollNo,
+    String currentPassword,
+    String newPassword,
+  ) async {
+    try {
+      final response = await _apiService.post(
+        '/students/change-password',
+        data: {
+          'rollNo': rollNo,
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+        },
+      );
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': 'Password updated successfully'};
+      }
+      return {'success': false, 'message': 'Failed to update password'};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data['message'] ?? e.message ?? 'Update failed',
+      };
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
 }

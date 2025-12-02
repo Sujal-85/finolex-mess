@@ -5,13 +5,7 @@ import '../neumorphic_card.dart';
 
 class BalanceCard extends StatelessWidget {
   final double balance;
-  final VoidCallback onAddMoney;
-
-  const BalanceCard({
-    super.key,
-    required this.balance,
-    required this.onAddMoney,
-  });
+  const BalanceCard({super.key, required this.balance});
 
   @override
   Widget build(BuildContext context) {
@@ -36,31 +30,8 @@ class BalanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          GestureDetector(
-            onTap: onAddMoney,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.add, size: 16, color: AppColors.primary),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Add Money',
-                    style: GoogleFonts.roboto(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          const SizedBox(height: 16),
+          // Add Money button removed as per request
         ],
       ),
     );

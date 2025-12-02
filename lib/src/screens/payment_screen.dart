@@ -1,13 +1,17 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
-import '../services/payment_service.dart';
 import '../services/auth_service.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
+import '../widgets/profile_style_header.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
@@ -20,86 +24,30 @@ class _PaymentScreenState extends State<PaymentScreen>
     with TickerProviderStateMixin {
   // Controllers
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _upiIdController = TextEditingController();
-  final TextEditingController _cardNumberController = TextEditingController();
-  final TextEditingController _expiryController = TextEditingController();
-  final TextEditingController _cvvController = TextEditingController();
-  final TextEditingController _cardNameController = TextEditingController();
-  final TextEditingController _bankSearchController = TextEditingController();
-
-  // Animation controllers
-  late AnimationController _headerController;
-  late Animation<double> _headerFadeAnimation;
-  late Animation<Offset> _headerSlideAnimation;
-  late AnimationController _cardController;
-  late Animation<double> _cardFadeAnimation;
-  late Animation<Offset> _cardSlideAnimation;
+  final TextEditingController _userUpiController = TextEditingController();
 
   // State variables
-  int _selectedPaymentMethod = 0; // 0: UPI, 1: Card, 2: Net Banking
-  double _amount = 100.0;
-  bool _saveCard = false;
+  int _currentStep = 0; // 0: Amount & Method, 1: Timer (UPI only), 2: Success
+  double _amount = 1000.0;
   bool _isProcessing = false;
   bool _showSuccess = false;
-  String _selectedBank = '';
-  String _selectedQuickUpi = '';
-
-  // Mock data
-  final List<String> _savedUpiIds = ['john@upi', 'john@paytm', 'john@gpay'];
-  final List<Map<String, dynamic>> _banks = [
-    {
-      'name': 'State Bank of India',
-      'code': 'SBI',
-      'icon': Icons.account_balance,
-    },
-    {'name': 'HDFC Bank', 'code': 'HDFC', 'icon': Icons.account_balance},
-    {'name': 'ICICI Bank', 'code': 'ICICI', 'icon': Icons.account_balance},
-    {'name': 'Axis Bank', 'code': 'AXIS', 'icon': Icons.account_balance},
-    {
-      'name': 'Kotak Mahindra Bank',
-      'code': 'KOTAK',
-      'icon': Icons.account_balance,
-    },
-  ];
+  File? _receiptImage;
+  Timer? _timer;
+  int _timeLeft = 300; // 5 minutes
+  int _paymentMethodIndex = 0; // 0: QR Code, 1: UPI ID
+  bool _isUpiVerified = false;
 
   // Services
-  late PaymentService _paymentService;
   final AuthService _authService = AuthService();
+  final Dio _dio = Dio();
+  final ImagePicker _picker = ImagePicker();
   Map<String, dynamic>? _user;
 
   @override
   void initState() {
     super.initState();
-    _paymentService = PaymentService();
-    _paymentService.init(
-      _handlePaymentSuccess,
-      _handlePaymentError,
-      _handleExternalWallet,
-    );
     _fetchUser();
-
-    _amountController.text = _amount.toStringAsFixed(2);
-
-    // Initialize animations
-    _cardController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _cardFadeAnimation = CurvedAnimation(
-      parent: _cardController,
-      curve: Curves.easeOut,
-    );
-
-    _cardSlideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-          CurvedAnimation(parent: _cardController, curve: Curves.easeOutCubic),
-        );
-
-    // Start animations
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _cardController.forward();
-    });
+    _amountController.text = _amount.toStringAsFixed(0);
   }
 
   Future<void> _fetchUser() async {
@@ -111,262 +59,263 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   @override
   void dispose() {
-    _paymentService.dispose();
     _amountController.dispose();
-    _upiIdController.dispose();
-    _cardNumberController.dispose();
-    _expiryController.dispose();
-    _cvvController.dispose();
-    _cardNameController.dispose();
-    _bankSearchController.dispose();
-    _cardController.dispose();
+    _userUpiController.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) {
-    _paymentService
-        .verifyPayment(
-          orderId: response.orderId!,
-          paymentId: response.paymentId!,
-          signature: response.signature!,
-          studentId: _user?['id'] ?? _user?['_id'] ?? '',
-          amount: _amount,
-        )
-        .then((_) {
-          setState(() {
-            _isProcessing = false;
-            _showSuccess = true;
-          });
-
-          // Hide success animation after delay
-          Future.delayed(const Duration(seconds: 4), () {
-            if (mounted) {
-              setState(() {
-                _showSuccess = false;
-              });
-              context.pop(); // Go back after success
-            }
-          });
-        })
-        .catchError((e) {
-          setState(() => _isProcessing = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Payment Verification Failed: $e')),
-          );
+  void _startTimer() {
+    _timeLeft = 300;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_timeLeft > 0) {
+        setState(() {
+          _timeLeft--;
         });
+      } else {
+        timer.cancel();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment session timed out')),
+        );
+        setState(() {
+          _currentStep = 0;
+        });
+      }
+    });
   }
 
-  void _handlePaymentError(PaymentFailureResponse response) {
-    setState(() => _isProcessing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Payment Failed: ${response.message}')),
-    );
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('External Wallet: ${response.walletName}')),
-    );
+  String _formatTime(int seconds) {
+    final minutes = (seconds / 60).floor();
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
   void _updateAmount(double newAmount) {
     setState(() {
-      _amount = newAmount < 10 ? 10 : newAmount;
-      _amountController.text = _amount.toStringAsFixed(2);
+      _amount = newAmount < 1000 ? 1000 : newAmount;
+      _amountController.text = _amount.toStringAsFixed(0);
     });
   }
 
-  void _selectPaymentMethod(int index) {
-    setState(() {
-      _selectedPaymentMethod = index;
-    });
+  Future<void> _pickReceipt() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        _receiptImage = File(image.path);
+      });
+    }
   }
 
-  void _payNow() async {
+  void _verifyUpiId() {
+    if (_userUpiController.text.contains('@') &&
+        _userUpiController.text.length > 3) {
+      setState(() {
+        _isUpiVerified = true;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('UPI ID Verified')));
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid UPI ID format')));
+    }
+  }
+
+  Future<void> _submitPayment({bool isQr = false}) async {
+    // For QR, receipt is mandatory. For UPI App, it's optional/not requested.
+    if (isQr && _receiptImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please upload the transaction receipt')),
+      );
+      return;
+    }
+
     setState(() {
       _isProcessing = true;
     });
 
     try {
-      await _paymentService.openCheckout(
-        amount: _amount,
-        studentId: _user?['id'] ?? _user?['_id'] ?? '',
-        email: _user?['email'] ?? '',
-        contact: _user?['phone'] ?? '',
-        description: 'Canteen Wallet Top-up',
-        vpa: _upiIdController.text.isNotEmpty ? _upiIdController.text : null,
-      );
+      String? receiptUrl;
+      const String baseUrl = 'http://localhost:3000/api';
+
+      // 1. Upload Receipt if present
+      if (_receiptImage != null) {
+        String fileName = _receiptImage!.path.split('/').last;
+        FormData formData = FormData.fromMap({
+          "receipt": await MultipartFile.fromFile(
+            _receiptImage!.path,
+            filename: fileName,
+          ),
+        });
+        final uploadResponse = await _dio.post(
+          '$baseUrl/upload',
+          data: formData,
+        );
+        receiptUrl = uploadResponse.data['fileUrl'];
+      }
+
+      // 2. Create Transaction
+      final transactionData = {
+        'studentId': _user?['id'] ?? _user?['_id'],
+        'amount': _amount,
+        'receiptUrl': receiptUrl,
+        'upiId': _paymentMethodIndex == 1
+            ? (_userUpiController.text.isNotEmpty
+                  ? _userUpiController.text
+                  : 'UPI_APP')
+            : 'QR_SCAN',
+      };
+
+      await _dio.post('$baseUrl/payments/manual-upi', data: transactionData);
+
+      setState(() {
+        _isProcessing = false;
+        _showSuccess = true;
+        _currentStep = 2; // Success
+      });
+
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) {
+          context.pop();
+        }
+      });
     } catch (e) {
       setState(() {
         _isProcessing = false;
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error initiating payment: $e')));
+      ).showSnackBar(SnackBar(content: Text('Error submitting payment: $e')));
     }
   }
 
-  void _scanQr() {
-    // In a real app, this would open the camera to scan QR
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('QR scanner would open here'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+  Future<void> _launchUpiApp({String? appScheme}) async {
+    const String vpa = 'sandeeptambe86@okicici';
+    const String name = 'Sandeep Tambe';
+    final String uri =
+        'upi://pay?pa=$vpa&pn=$name&am=$_amount&cu=INR'; // Standard UPI intent
+
+    Uri launchUri = Uri.parse(uri);
+    if (appScheme != null) {
+      // If specific app scheme is requested (e.g. phonepe://)
+      // Note: Usually we launch the intent with the package or scheme.
+      // For simplicity, we stick to the standard intent which Android handles by showing the chooser.
+      // Or we can try to launch specific scheme if we knew the format.
+      // But standard 'upi://' is best for "Detect automatically".
+    }
+
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+      // After launching, we start the timer screen for UPI flow
+      setState(() {
+        _currentStep = 1; // Timer Screen
+      });
+      _startTimer();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No UPI app found to handle this request'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-          onPressed: () => context.pop(),
-        ),
-        title: Text(
-          'Make Payment',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        centerTitle: true,
-        elevation: 0,
-        actions: [
-          Container(
-            margin: const EdgeInsets.all(10),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 16,
-                  color: Colors.white,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '₹1,250.75',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
       body: Stack(
         children: [
-          // Main content
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-
-                // Payment amount section
-                _buildPaymentAmountSection(),
-
-                const SizedBox(height: 24),
-
-                // Payment method tabs
-                _buildPaymentMethodTabs(),
-
-                const SizedBox(height: 24),
-
-                // Payment method content
-                _buildPaymentMethodContent(),
-
-                const SizedBox(height: 24),
-
-                // CTA buttons
-                _buildCtaButtons(),
-
-                const SizedBox(height: 24),
-              ],
-            ),
+          Column(
+            children: [
+              ProfileStyleHeader(
+                title: 'Add Money',
+                showBackButton: true,
+                onBackTap: () {
+                  if (_currentStep > 0 && _currentStep < 2) {
+                    setState(() {
+                      _currentStep = 0;
+                      _timer?.cancel();
+                    });
+                  } else {
+                    context.pop();
+                  }
+                },
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        if (_currentStep == 0) ...[
+                          _buildAmountSection(),
+                          const SizedBox(height: 20),
+                          _buildTabs(),
+                          const SizedBox(height: 20),
+                          if (_paymentMethodIndex == 0) _buildQrContent(),
+                          if (_paymentMethodIndex == 1) _buildUpiContent(),
+                        ],
+                        if (_currentStep == 1) _buildTimerSection(),
+                        if (_currentStep == 2) _buildSuccessSection(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
 
-          // Processing overlay
           if (_isProcessing)
             Container(
-              color: Colors.black.withValues(alpha: 0.7),
+              color: Colors.black.withOpacity(0.7),
               child: const Center(child: FamtLoader()),
             ),
 
-          // Success overlay
           if (_showSuccess)
             Container(
-              color: Colors.black.withValues(alpha: 0.7),
-              child: Center(
-                child: SuccessConfetti(
-                  onCompleted: () {
-                    setState(() {
-                      _showSuccess = false;
-                    });
-                  },
-                ),
-              ),
+              color: Colors.black.withOpacity(0.7),
+              child: Center(child: SuccessConfetti(onCompleted: () {})),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildPaymentAmountSection() {
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
+  Widget _buildAmountSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Enter Amount',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary(context),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
           padding: const EdgeInsets.all(24),
           decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Payment Amount',
+                '₹${_amount.toStringAsFixed(0)}',
                 style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary(context),
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Amount display
-              Center(
-                child: Text(
-                  '₹${_amount.toStringAsFixed(2)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Amount adjustment
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Minus button
                   GestureDetector(
-                    onTap: () => _updateAmount(_amount - 10),
+                    onTap: () => _updateAmount(_amount - 100),
                     child: Container(
                       width: 40,
                       height: 40,
@@ -378,10 +327,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                       child: const Icon(Icons.remove, color: Colors.white),
                     ),
                   ),
-
                   const SizedBox(width: 20),
-
-                  // Amount input
                   Container(
                     width: 120,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -402,20 +348,17 @@ class _PaymentScreenState extends State<PaymentScreen>
                       ),
                       onChanged: (value) {
                         if (value.isNotEmpty) {
-                          final amount = double.tryParse(value) ?? 10.0;
+                          final amount = double.tryParse(value) ?? 1000.0;
                           setState(() {
-                            _amount = amount < 10 ? 10 : amount;
+                            _amount = amount;
                           });
                         }
                       },
                     ),
                   ),
-
                   const SizedBox(width: 20),
-
-                  // Plus button
                   GestureDetector(
-                    onTap: () => _updateAmount(_amount + 10),
+                    onTap: () => _updateAmount(_amount + 100),
                     child: Container(
                       width: 40,
                       height: 40,
@@ -429,933 +372,453 @@ class _PaymentScreenState extends State<PaymentScreen>
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // Subtext
-              Center(
-                child: Text(
-                  'Minimum ₹10 | No convenience fee',
-                  style: GoogleFonts.roboto(
-                    fontSize: 14,
-                    color: AppColors.textSecondaryLight,
-                  ),
+              Text(
+                'Minimum amount: ₹1000',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: _amount < 1000
+                      ? Colors.red
+                      : AppColors.textSecondaryLight,
                 ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Dotted divider
-              const Divider(
-                height: 1,
-                thickness: 1,
-                indent: 20,
-                endIndent: 20,
-                color: Colors.grey,
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildPaymentMethodTabs() {
-    final tabs = ['UPI', 'Card', 'Net Banking'];
-
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardFadeAnimation,
-        child: Container(
-          height: 50,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
-          child: Row(
-            children: List.generate(tabs.length, (index) {
-              final isSelected = _selectedPaymentMethod == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => _selectPaymentMethod(index),
-                  child: Container(
-                    margin: EdgeInsets.only(
-                      left: index == 0 ? 4 : 0,
-                      right: index == tabs.length - 1 ? 4 : 0,
-                    ),
-                    decoration: isSelected
-                        ? BoxDecoration(
-                            borderRadius: BorderRadius.circular(25),
-                            color: AppColors.primary.withOpacity(0.1),
-                          )
-                        : null,
-                    child: Center(
-                      child: Text(
-                        tabs[index],
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.w500,
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.textSecondaryLight,
-                        ),
-                      ),
+  Widget _buildTabs() {
+    return Container(
+      height: 50,
+      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _paymentMethodIndex = 0),
+              child: Container(
+                decoration: _paymentMethodIndex == 0
+                    ? BoxDecoration(
+                        borderRadius: BorderRadius.circular(25),
+                        color: AppColors.primary.withOpacity(0.1),
+                      )
+                    : null,
+                child: Center(
+                  child: Text(
+                    'Scan QR',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: _paymentMethodIndex == 0
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                      color: _paymentMethodIndex == 0
+                          ? AppColors.primary
+                          : AppColors.textSecondaryLight,
                     ),
                   ),
                 ),
-              );
-            }),
+              ),
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPaymentMethodContent() {
-    switch (_selectedPaymentMethod) {
-      case 0:
-        return _buildUpiPaymentSection();
-      case 1:
-        return _buildCardPaymentSection();
-      case 2:
-        return _buildNetBankingSection();
-      default:
-        return _buildUpiPaymentSection();
-    }
-  }
-
-  Widget _buildUpiPaymentSection() {
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(20),
-          decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'UPI ID',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // UPI ID input
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: NeumorphicStyle.cardDecoration(
-                  context,
-                  borderRadius: 20,
-                ),
-                child: TextField(
-                  controller: _upiIdController,
-                  keyboardType: TextInputType.text,
-                  style: GoogleFonts.poppins(fontSize: 16),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Enter your UPI ID',
-                    hintStyle: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: AppColors.textSecondaryLight.withOpacity(0.7),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.account_balance_wallet_outlined,
-                      color: AppColors.primary.withOpacity(0.7),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _paymentMethodIndex = 1),
+              child: Container(
+                decoration: _paymentMethodIndex == 1
+                    ? BoxDecoration(
+                        borderRadius: BorderRadius.circular(25),
+                        color: AppColors.primary.withOpacity(0.1),
+                      )
+                    : null,
+                child: Center(
+                  child: Text(
+                    'UPI ID',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: _paymentMethodIndex == 1
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                      color: _paymentMethodIndex == 1
+                          ? AppColors.primary
+                          : AppColors.textSecondaryLight,
                     ),
                   ),
                 ),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 16),
-
-              // Verify UPI button
-              Center(
+  Widget _buildQrContent() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
+      child: Column(
+        children: [
+          Text(
+            'Scan QR to Pay',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Stack(
+            children: [
+              Container(
+                height: 250,
+                width: 250,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(15),
+                  image: const DecorationImage(
+                    image: AssetImage('assets/images/upi_qr.jpg'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 10,
+                right: 10,
                 child: GestureDetector(
-                  onTap: () {
-                    // In a real app, this would verify the UPI ID
-                  },
+                  onTap: _launchUpiApp,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    decoration: NeumorphicStyle.buttonDecoration(
-                      context,
-                      borderRadius: 20,
-                      color: AppColors.primary,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Verify UPI',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.check_circle_outline,
-                          color: Colors.white,
-                          size: 20,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 5,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Quick options
-              Text(
-                'Quick Options',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Quick UPI options
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildQuickUpiOption(
-                    'GPay',
-                    Icons.account_balance_wallet,
-                    'gpay',
-                  ),
-                  _buildQuickUpiOption(
-                    'PhonePe',
-                    Icons.account_balance_wallet,
-                    'phonepe',
-                  ),
-                  _buildQuickUpiOption(
-                    'Paytm',
-                    Icons.account_balance_wallet,
-                    'paytm',
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              // Saved UPI IDs
-              if (_savedUpiIds.isNotEmpty) ...[
-                Text(
-                  'Saved UPI IDs',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary(context),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Column(
-                  children: _savedUpiIds.map((upiId) {
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _upiIdController.text = upiId;
-                        });
-                      },
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: NeumorphicStyle.cardDecoration(
-                          context,
-                          borderRadius: 20,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.account_balance_wallet_outlined,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              upiId,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: AppColors.textPrimary(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Scan QR button
-              Center(
-                child: GestureDetector(
-                  onTap: _scanQr,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 14,
+                    child: const Icon(
+                      Icons.share,
+                      color: AppColors.primary,
+                      size: 20,
                     ),
-                    decoration: NeumorphicStyle.cardDecoration(
-                      context,
-                      borderRadius: 20,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Upload Payment Receipt',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: _pickReceipt,
+            child: Container(
+              width: double.infinity,
+              height: 150,
+              decoration: BoxDecoration(
+                color: AppColors.surface(context),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.5),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: _receiptImage != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.file(_receiptImage!, fit: BoxFit.cover),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
-                          Icons.qr_code_scanner,
+                        Icon(
+                          Icons.cloud_upload_outlined,
+                          size: 48,
                           color: AppColors.primary,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(height: 12),
                         Text(
-                          'Scan QR Instead',
+                          'Tap to upload screenshot',
                           style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.primary,
+                            color: AppColors.textSecondaryLight,
                           ),
                         ),
                       ],
                     ),
-                  ),
+            ),
+          ),
+          const SizedBox(height: 30),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _submitPayment(isQr: true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
                 ),
               ),
-            ],
+              child: Text(
+                'Submit Payment',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildQuickUpiOption(String name, IconData icon, String id) {
-    final isSelected = _selectedQuickUpi == id;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedQuickUpi = isSelected ? '' : id;
-        });
-      },
-      child: Container(
-        width: 80,
-        height: 80,
-        decoration: NeumorphicStyle.cardDecoration(
-          context,
-          borderRadius: 20,
-          shadowIntensity: isSelected ? 0.2 : 0.1,
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isSelected
-                  ? AppColors.primary
-                  : AppColors.textSecondaryLight,
-              size: 30,
+  Widget _buildUpiContent() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
+      child: Column(
+        children: [
+          Text(
+            'Enter Your UPI ID',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(context),
             ),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                color: isSelected
-                    ? AppColors.primary
-                    : AppColors.textSecondaryLight,
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: NeumorphicStyle.cardDecoration(
+              context,
+              borderRadius: 20,
+            ),
+            child: TextField(
+              controller: _userUpiController,
+              style: GoogleFonts.poppins(fontSize: 16),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'e.g. user@upi',
+                hintStyle: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: AppColors.textSecondaryLight.withOpacity(0.7),
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.check_circle_outline),
+                  onPressed: _verifyUpiId,
+                  color: _isUpiVerified ? Colors.green : Colors.grey,
+                ),
+              ),
+              onChanged: (val) {
+                if (_isUpiVerified) setState(() => _isUpiVerified = false);
+              },
+            ),
+          ),
+          if (_isUpiVerified) ...[
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _launchUpiApp,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
+                child: Text(
+                  'Pay Now',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCardPaymentSection() {
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(20),
-          decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 30),
+          const Divider(),
+          const SizedBox(height: 20),
+          Text(
+            'Or Pay with Installed Apps',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondaryLight,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              // Card preview
-              Container(
-                height: 180,
-                margin: const EdgeInsets.only(bottom: 20),
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withValues(alpha: 0.8),
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Card logos
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Icon(
-                          Icons.account_balance,
-                          color: Colors.white,
-                          size: 30,
-                        ),
-                        Text(
-                          'VISA',
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // Card number
-                    Text(
-                      _cardNumberController.text.isEmpty
-                          ? '**** **** **** ****'
-                          : _formatCardNumber(_cardNumberController.text),
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        letterSpacing: 2,
-                      ),
-                    ),
-
-                    // Card details
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Card Holder',
-                              style: GoogleFonts.poppins(
-                                fontSize: 10,
-                                color: Colors.white.withOpacity(0.8),
-                              ),
-                            ),
-                            Text(
-                              _cardNameController.text.isEmpty
-                                  ? 'YOUR NAME'
-                                  : _cardNameController.text.toUpperCase(),
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Expires',
-                              style: GoogleFonts.poppins(
-                                fontSize: 10,
-                                color: Colors.white.withOpacity(0.8),
-                              ),
-                            ),
-                            Text(
-                              _expiryController.text.isEmpty
-                                  ? 'MM/YY'
-                                  : _expiryController.text,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // Card Number
-              Text(
-                'Card Number',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: NeumorphicStyle.cardDecoration(
-                  context,
-                  borderRadius: 20,
-                ),
-                child: TextField(
-                  controller: _cardNumberController,
-                  keyboardType: TextInputType.number,
-                  maxLength: 16,
-                  style: GoogleFonts.poppins(fontSize: 16),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: '1234 5678 9012 3456',
-                    hintStyle: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: AppColors.textSecondaryLight.withOpacity(0.7),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.credit_card_outlined,
-                      color: AppColors.primary.withOpacity(0.7),
-                    ),
-                    counterText: '',
-                  ),
-                  onChanged: (value) {
-                    setState(() {}); // Trigger rebuild for card preview
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Expiry and CVV
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Expiry Date',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textPrimary(context),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: NeumorphicStyle.cardDecoration(
-                            context,
-                            borderRadius: 20,
-                          ),
-                          child: TextField(
-                            controller: _expiryController,
-                            keyboardType: TextInputType.datetime,
-                            maxLength: 5,
-                            style: GoogleFonts.poppins(fontSize: 16),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'MM/YY',
-                              hintStyle: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: AppColors.textSecondaryLight.withOpacity(
-                                  0.7,
-                                ),
-                              ),
-                              prefixIcon: Icon(
-                                Icons.calendar_today_outlined,
-                                color: AppColors.primary.withOpacity(0.7),
-                              ),
-                              counterText: '',
-                            ),
-                            onChanged: (value) {
-                              setState(
-                                () {},
-                              ); // Trigger rebuild for card preview
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'CVV',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.textPrimary(context),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: NeumorphicStyle.cardDecoration(
-                            context,
-                            borderRadius: 20,
-                          ),
-                          child: TextField(
-                            controller: _cvvController,
-                            keyboardType: TextInputType.number,
-                            maxLength: 3,
-                            obscureText: true,
-                            style: GoogleFonts.poppins(fontSize: 16),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: '123',
-                              hintStyle: GoogleFonts.poppins(
-                                fontSize: 16,
-                                color: AppColors.textSecondaryLight.withOpacity(
-                                  0.7,
-                                ),
-                              ),
-                              prefixIcon: Icon(
-                                Icons.lock_outline,
-                                color: AppColors.primary.withOpacity(0.7),
-                              ),
-                              counterText: '',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // Cardholder Name
-              Text(
-                'Cardholder Name',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: NeumorphicStyle.cardDecoration(
-                  context,
-                  borderRadius: 20,
-                ),
-                child: TextField(
-                  controller: _cardNameController,
-                  keyboardType: TextInputType.text,
-                  style: GoogleFonts.poppins(fontSize: 16),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Enter cardholder name',
-                    hintStyle: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: AppColors.textSecondaryLight.withOpacity(0.7),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.person_outline,
-                      color: AppColors.primary.withOpacity(0.7),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {}); // Trigger rebuild for card preview
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Save Card toggle
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Save Card',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textPrimary(context),
-                    ),
-                  ),
-                  Switch(
-                    value: _saveCard,
-                    onChanged: (value) {
-                      setState(() {
-                        _saveCard = value;
-                      });
-                    },
-                    activeThumbColor: AppColors.primary,
-                  ),
-                ],
-              ),
+              _buildUpiAppButton('GPay', 'gpay', Colors.blue),
+              _buildUpiAppButton('PhonePe', 'phonepe', Colors.purple),
+              _buildUpiAppButton('Paytm', 'paytm', Colors.indigo),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  String _formatCardNumber(String number) {
-    // Remove all non-digit characters
-    final digitsOnly = number.replaceAll(RegExp(r'\D'), '');
-
-    // Format as XXXX XXXX XXXX XXXX
-    final formatted = <String>[];
-    for (int i = 0; i < digitsOnly.length; i += 4) {
-      final end = (i + 4 < digitsOnly.length) ? i + 4 : digitsOnly.length;
-      formatted.add(digitsOnly.substring(i, end));
-    }
-
-    return formatted.join(' ');
+  Widget _buildUpiAppButton(String name, String scheme, Color color) {
+    return GestureDetector(
+      onTap: () => _launchUpiApp(appScheme: scheme),
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
+            child: Icon(Icons.account_balance_wallet, color: color, size: 30),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            name,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _buildNetBankingSection() {
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(20),
-          decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTimerSection() {
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        // Circular Timer
+        SizedBox(
+          height: 250,
+          width: 250,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              // Search bar
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: NeumorphicStyle.cardDecoration(
-                  context,
-                  borderRadius: 20,
-                ),
-                child: TextField(
-                  controller: _bankSearchController,
-                  keyboardType: TextInputType.text,
-                  style: GoogleFonts.poppins(fontSize: 16),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Search for your bank',
-                    hintStyle: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: AppColors.textSecondaryLight.withOpacity(0.7),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_outlined,
-                      color: AppColors.primary.withOpacity(0.7),
-                    ),
-                  ),
+              CircularProgressIndicator(
+                value: _timeLeft / 300,
+                strokeWidth: 12,
+                backgroundColor: Colors.grey[300],
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppColors.primary,
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              // Popular banks
-              Text(
-                'Popular Banks',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary(context),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Bank list
-              Column(
-                children: _banks.map((bank) {
-                  final isSelected = _selectedBank == bank['code'];
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedBank = isSelected ? '' : bank['code'];
-                      });
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                      decoration: NeumorphicStyle.cardDecoration(
-                        context,
-                        borderRadius: 20,
-                        shadowIntensity: isSelected ? 0.2 : 0.1,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            bank['icon'],
-                            color: isSelected
-                                ? AppColors.primary
-                                : AppColors.textSecondaryLight,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              bank['name'],
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                                color: isSelected
-                                    ? AppColors.primary
-                                    : AppColors.textPrimary(context),
-                              ),
-                            ),
-                          ),
-                          if (isSelected)
-                            const Icon(
-                              Icons.check_circle,
-                              color: AppColors.primary,
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Faster Payment badge
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.bolt_outlined, color: AppColors.primary),
-                    const SizedBox(width: 8),
                     Text(
-                      'Faster Payment Available',
+                      'Time Remaining',
                       style: GoogleFonts.poppins(
                         fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.primary,
+                        color: AppColors.textSecondaryLight,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCtaButtons() {
-    return SlideTransition(
-      position: _cardSlideAnimation,
-      child: FadeTransition(
-        opacity: _cardFadeAnimation,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              // Pay Now button
-              GestureDetector(
-                onTap: _payNow,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(25),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        AppColors.accent,
-                        AppColors.accent.withValues(alpha: 0.8),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withValues(alpha: 0.4),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Pay Now',
+                    const SizedBox(height: 8),
+                    Text(
+                      _formatTime(_timeLeft),
                       style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // View Payment History button
-              GestureDetector(
-                onTap: () => context.push('/history'),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: NeumorphicStyle.cardDecoration(
-                    context,
-                    borderRadius: 25,
-                  ),
-                  child: Center(
-                    child: Text(
-                      'View Payment History',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary(context),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
+        const SizedBox(height: 40),
+        Text(
+          'Complete payment in your UPI app',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            color: AppColors.textSecondaryLight,
+          ),
+        ),
+        const SizedBox(height: 30),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => _submitPayment(isQr: false),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+            ),
+            child: Text(
+              'I have Paid',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSuccessSection() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 50),
+          Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.access_time_filled,
+              color: Colors.orange,
+              size: 80,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Payment Submitted',
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Waiting for manager approval.',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              color: AppColors.textSecondaryLight,
+            ),
+          ),
+        ],
       ),
     );
   }

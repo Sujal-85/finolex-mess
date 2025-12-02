@@ -8,7 +8,16 @@ import 'src/services/notification_service.dart';
 import 'src/services/settings_service.dart';
 import 'src/services/receipt_service.dart';
 
+import 'package:flutter/services.dart';
+
 void main() {
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark, // For Android (dark icons)
+      statusBarBrightness: Brightness.light, // For iOS (dark icons)
+    ),
+  );
   runApp(const MyApp());
 }
 

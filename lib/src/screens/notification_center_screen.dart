@@ -7,6 +7,7 @@ import '../services/notification_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/empty_state.dart';
+import '../widgets/profile_style_header.dart';
 
 class NotificationCenterScreen extends StatefulWidget {
   const NotificationCenterScreen({super.key});
@@ -88,61 +89,22 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
   }
 
   Widget _buildHeader(NotificationService notificationService) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: AppColors.surface(context)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Back button
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.surface(context),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(4, 4),
-                  ),
-                  BoxShadow(
-                    color: Colors.white.withOpacity(0.8),
-                    blurRadius: 10,
-                    offset: const Offset(-4, -4),
-                  ),
-                ],
-              ),
-              child: Icon(
-                Icons.arrow_back_ios_new,
-                size: 18,
-                color: AppColors.primary,
-              ),
-            ),
+    return ProfileStyleHeader(
+      title: 'Notifications',
+      showBackButton: true,
+      onBackTap: () => context.pop(),
+      actions: [
+        IconButton(
+          onPressed: () {
+            context.push('/settings');
+          },
+          icon: const Icon(
+            Icons.settings_outlined,
+            color: Colors.white,
+            size: 24,
           ),
-          Text(
-            'Notifications',
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              context.push('/settings');
-            },
-            icon: Icon(
-              Icons.settings_outlined,
-              color: AppColors.textPrimary(context),
-              size: 28,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

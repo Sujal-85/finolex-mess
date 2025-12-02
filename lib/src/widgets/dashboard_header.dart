@@ -53,7 +53,7 @@ class DashboardHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Good Morning,',
+                  _getGreeting(),
                   style: GoogleFonts.roboto(
                     fontSize: 14,
                     color: AppColors.textSecondaryLight,
@@ -116,5 +116,16 @@ class DashboardHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return 'Good Morning,';
+    } else if (hour < 17) {
+      return 'Good Afternoon,';
+    } else {
+      return 'Good Evening,';
+    }
   }
 }

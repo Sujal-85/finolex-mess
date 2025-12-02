@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/shimmer_effect.dart';
@@ -48,22 +50,23 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Future<void> _loadUser() async {
     try {
-      final user = await _authService.getUser();
+      // Refresh user data to get latest details including hostel info
+      final user = await _authService.refreshUser();
       if (user != null) {
         setState(() {
           _userProfile = UserProfile(
             name: user['name'] ?? 'Student',
             collegeId: user['rollNo'] ?? 'N/A',
-            hostelBlock: 'A Block', // Placeholder
-            roomNumber: '101', // Placeholder
+            hostelBlock: user['hostelDetails']?['hostelName'] ?? 'Not Assigned',
+            roomNumber: user['hostelDetails']?['roomNo'] ?? 'N/A',
             email: user['email'] ?? '',
             phone: user['phone'] ?? '',
-            gender: 'Male', // Placeholder
-            messType: 'Vegetarian', // Placeholder
-            membershipStatus: 'Active', // Placeholder
+            gender: 'Male', // Placeholder - Not in schema
+            messType: 'Vegetarian', // Placeholder - Not in schema
+            membershipStatus: 'Active', // Placeholder - Not in schema
             currentBalance: (user['balance'] ?? 0).toDouble(),
-            lastPayment: 500.00, // Placeholder
-            lastPaymentDate: DateTime.now().subtract(const Duration(days: 3)),
+            lastPayment: 0.00, // Placeholder - Not in schema
+            lastPaymentDate: DateTime.now(), // Placeholder
             profileImage: user['profileImage'],
           );
           _isLoading = false;
@@ -88,70 +91,34 @@ class _ProfileScreenState extends State<ProfileScreen>
     // In a real app, this would open image picker
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Edit photo functionality would open here'),
+        content: Text('Edit photo functionality coming soon'),
         backgroundColor: AppColors.primary,
       ),
     );
   }
 
   void _editProfile() {
-    // Navigate to edit profile screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Edit profile screen would open here'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+    context.push('/edit-profile');
   }
 
   void _changePassword() {
-    // Navigate to change password screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Change password screen would open here'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+    context.push('/change-password');
   }
 
   void _downloadID() {
-    // Download ID functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('ID downloaded successfully'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+    context.push('/id-card');
   }
 
   void _viewReceipts() {
-    // Navigate to receipts screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Receipts screen would open here'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+    context.push('/all-receipts');
   }
 
   void _contactSupport() {
-    // Open support chat or email
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Support contact would open here'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+    context.push('/emergency');
   }
 
   void _rechargeWallet() {
-    // Navigate to recharge screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Recharge screen would open here'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+    context.push('/payment');
   }
 
   void _logout() {
@@ -180,15 +147,12 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // In a real app, this would clear user session and navigate to login
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Logged out successfully'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
+                await _authService.logout();
+                if (context.mounted) {
+                  context.go('/login');
+                }
               },
               child: Text(
                 'Logout',
@@ -277,19 +241,21 @@ class _ProfileScreenState extends State<ProfileScreen>
                       shape: BoxShape.circle,
                       color: AppColors.surface(context),
                       border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         width: 3,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: ClipOval(
-                      child: _userProfile?.profileImage != null
+                      child:
+                          _userProfile?.profileImage != null &&
+                              _userProfile!.profileImage!.isNotEmpty
                           ? Image.network(
                               _userProfile!.profileImage!,
                               fit: BoxFit.cover,
@@ -359,14 +325,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                     _userProfile?.collegeId ?? '',
                     style: GoogleFonts.poppins(
                       fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Icon(
                     Icons.verified,
                     size: 18,
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                   ),
                 ],
               ),
@@ -377,7 +343,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 '${_userProfile?.hostelBlock ?? ''}, Room ${_userProfile?.roomNumber ?? ''}',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                 ),
               ),
             ],
@@ -599,21 +565,17 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final itemWidth = (constraints.maxWidth - 32) / 3;
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 3,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: (itemWidth - 16) / 80,
-                children: actions.map((action) {
-                  return _buildQuickActionButton(action);
-                }).toList(),
+          Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: actions.map((action) {
+              return SizedBox(
+                width:
+                    (MediaQuery.of(context).size.width - 32 - 32) /
+                    3, // 3 items per row, accounting for padding and spacing
+                child: _buildQuickActionButton(action),
               );
-            },
+            }).toList(),
           ),
         ],
       ),
@@ -624,6 +586,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return GestureDetector(
       onTap: action.onTap,
       child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -638,6 +601,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 color: AppColors.textPrimary(context),
               ),
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -648,36 +613,42 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildSettingsSection() {
     final settings = [
       SettingItem(
-        icon: Icons.language_outlined,
-        label: 'Language',
-        trailing: Text(
-          'English',
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: AppColors.textSecondaryLight,
-          ),
-        ),
+        icon: Icons.feedback_outlined,
+        label: 'Feedback Form',
         onTap: () {
-          // Language selection
+          context.push('/feedback');
         },
       ),
       SettingItem(
-        icon: Icons.notifications_outlined,
-        label: 'Notifications',
-        trailing: Switch(
-          value: true,
-          onChanged: (value) {},
-          activeThumbColor: AppColors.primary,
-        ),
+        icon: Icons.contact_phone_outlined,
+        label: 'Contact Canteen Manager',
         onTap: () {
-          // Notification settings
+          _showContactDialog(
+            'Canteen Manager',
+            'Mr. Sandeep Tambe',
+            '9860630677',
+          );
+        },
+      ),
+      SettingItem(
+        icon: Icons.admin_panel_settings_outlined,
+        label: 'Warden Info',
+        onTap: () {
+          _showWardenDialog();
+        },
+      ),
+      SettingItem(
+        icon: Icons.code_outlined,
+        label: 'Developer Info',
+        onTap: () {
+          _showDeveloperDialog();
         },
       ),
       SettingItem(
         icon: Icons.privacy_tip_outlined,
         label: 'Privacy & Terms',
         onTap: () {
-          // Privacy policy and terms
+          context.push('/about');
         },
       ),
       SettingItem(
@@ -757,6 +728,220 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  void _showContactDialog(String title, String name, String phone) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          title,
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              name,
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.phone, size: 18, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(
+                  phone,
+                  style: GoogleFonts.roboto(fontSize: 16),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () {
+              _launchDialer(phone);
+              Navigator.pop(context);
+            },
+            child: const Text('Call'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showWardenDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Warden Info',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildWardenItem('Head Warden', 'Mr. Vidyasheel Bagde', '+919823123845'),
+            const Divider(),
+            _buildWardenItem('Boys Warden', 'Mr. Sharma', '+918619664663'),
+            const Divider(),
+            _buildWardenItem('Girls Warden', 'Ms. Sankareshwari', '+919423297439'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWardenItem(String role, String name, String phone) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            role,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: AppColors.textSecondaryLight,
+            ),
+          ),
+          Text(
+            name,
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () => _launchDialer(phone),
+            child: Row(
+              children: [
+                const Icon(Icons.phone, size: 16, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Text(
+                  phone,
+                  style: GoogleFonts.roboto(
+                    fontSize: 14,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeveloperDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Developer Info',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircleAvatar(
+              radius: 40,
+              backgroundImage: AssetImage(
+                'assets/images/profile.png',
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Sujal Sadanand Khedekar',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              'Lead Developer & Creator',
+              style: GoogleFonts.poppins(
+                color: AppColors.textSecondaryLight,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildDeveloperLink(Icons.phone, '9359742537', () => _launchDialer('9359742537')),
+            _buildDeveloperLink(Icons.email, 'khedekarsujay720@gmail.com', () => _launchEmail('khedekarsujay720@gmail.com')),
+            _buildDeveloperLink(Icons.link, 'GitHub Profile', () => _launchUrl('https://github.com/Sujal-85')),
+            _buildDeveloperLink(Icons.work, 'LinkedIn Profile', () => _launchUrl('https://www.linkedin.com/in/sujal-khedekar-a82b05293/')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeveloperLink(IconData icon, String text, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: AppColors.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                style: GoogleFonts.roboto(fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const Icon(Icons.open_in_new, size: 14, color: Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchDialer(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
+  }
+
+  Future<void> _launchEmail(String email) async {
+    final Uri launchUri = Uri(scheme: 'mailto', path: email);
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
   Widget _buildLoadingSkeleton() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -799,8 +984,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           const SizedBox(height: 16),
           _buildInfoCardSkeleton(),
           const SizedBox(height: 16),
-          _buildInfoCardSkeleton(),
-          const SizedBox(height: 24),
 
           // Quick actions skeleton
           Container(
@@ -855,10 +1038,6 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildInfoCardSkeleton() {
     return Container(
-      width: double.infinity,
-      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -890,7 +1069,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             }),
           ],
         ),
-      ),
     );
   }
 }

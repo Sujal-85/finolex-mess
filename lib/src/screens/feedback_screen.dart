@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/cloudinary_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
+import '../widgets/profile_style_header.dart';
 
 class FeedbackScreen extends StatefulWidget {
   const FeedbackScreen({super.key});
@@ -22,9 +23,7 @@ class _FeedbackScreenState extends State<FeedbackScreen>
   final TextEditingController _commentController = TextEditingController();
 
   // Animation controllers
-  late AnimationController _headerController;
-  late Animation<double> _headerFadeAnimation;
-  late Animation<Offset> _headerSlideAnimation;
+  // Animation controllers
   late AnimationController _cardController;
   late Animation<double> _cardFadeAnimation;
   late Animation<Offset> _cardSlideAnimation;
@@ -62,24 +61,7 @@ class _FeedbackScreenState extends State<FeedbackScreen>
     super.initState();
 
     // Initialize animations
-    _headerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    _headerFadeAnimation = CurvedAnimation(
-      parent: _headerController,
-      curve: Curves.easeOut,
-    );
-
-    _headerSlideAnimation =
-        Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _headerController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
-
+    // Initialize animations
     _cardController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -112,7 +94,6 @@ class _FeedbackScreenState extends State<FeedbackScreen>
 
     // Start animations
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _headerController.forward();
       _cardController.forward();
     });
   }
@@ -120,7 +101,6 @@ class _FeedbackScreenState extends State<FeedbackScreen>
   @override
   void dispose() {
     _commentController.dispose();
-    _headerController.dispose();
     _cardController.dispose();
     _successController.dispose();
     super.dispose();
@@ -258,7 +238,12 @@ class _FeedbackScreenState extends State<FeedbackScreen>
             child: Column(
               children: [
                 // Header
-                _buildHeader(),
+                // Header
+                ProfileStyleHeader(
+                  title: 'Feedback',
+                  showBackButton: true,
+                  onBackTap: () => context.pop(),
+                ),
 
                 const SizedBox(height: 24),
 
@@ -297,80 +282,6 @@ class _FeedbackScreenState extends State<FeedbackScreen>
     );
   }
 
-  Widget _buildHeader() {
-    return SlideTransition(
-      position: _headerSlideAnimation,
-      child: FadeTransition(
-        opacity: _headerFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.primary,
-                AppColors.primary.withValues(alpha: 0.8),
-              ],
-            ),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // App bar
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Back button
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back_ios_new,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-
-                  // Title
-                  Text(
-                    'Feedback',
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-
-                  // Empty space for alignment
-                  Container(width: 40),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmojiRatingSlider() {
     return SlideTransition(
       position: _cardSlideAnimation,
@@ -396,7 +307,7 @@ class _FeedbackScreenState extends State<FeedbackScreen>
 
               // Emoji slider track
               Container(
-                height: 50,
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
                   color: AppColors.surface(context).withOpacity(0.7),
                   borderRadius: BorderRadius.circular(25),
@@ -415,27 +326,16 @@ class _FeedbackScreenState extends State<FeedbackScreen>
                     ),
                   ],
                 ),
-                child: Stack(
-                  children: [
-                    // Track
-                    Positioned.fill(
-                      child: Container(
-                        margin: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface(context).withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                    ),
-
-                    // Emojis
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(_emojis.length, (index) {
-                        final isSelected = _selectedRating == index;
-                        return GestureDetector(
-                          onTap: () => _selectRating(index),
-                          child: AnimatedContainer(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: List.generate(_emojis.length, (index) {
+                    final isSelected = _selectedRating == index;
+                    return GestureDetector(
+                      onTap: () => _selectRating(index),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
                             transform: Matrix4.identity()
                               ..scale(isSelected ? 1.2 : 1.0),
@@ -456,33 +356,24 @@ class _FeedbackScreenState extends State<FeedbackScreen>
                               ),
                             ),
                           ),
-                        );
-                      }),
-                    ),
-                  ],
+                          const SizedBox(height: 8),
+                          Text(
+                            _emojis[index]['label'],
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: isSelected
+                                  ? _emojis[index]['color']
+                                  : AppColors.textSecondaryLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Labels
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: List.generate(_emojis.length, (index) {
-                  final isSelected = _selectedRating == index;
-                  return Text(
-                    _emojis[index]['label'],
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: isSelected
-                          ? _emojis[index]['color']
-                          : AppColors.textSecondaryLight,
-                    ),
-                  );
-                }),
               ),
             ],
           ),
