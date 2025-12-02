@@ -9,12 +9,15 @@ const otpStore = new Map();
 // Email Transporter
 const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // true for 465, false for other ports
+    port: 465,
+    secure: true, // true for 465, false for other ports
     auth: {
         user: 'khedekarsujay720@gmail.com',
         pass: 'hmil kblm wgaq cbqd'
-    }
+    },
+    connectionTimeout: 10000, // 10 seconds
+    logger: true,
+    debug: true
 });
 
 // Verify connection configuration
