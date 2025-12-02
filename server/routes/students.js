@@ -45,10 +45,42 @@ router.get('/:rollNo', async (req, res) => {
     }
 });
 
+// Get today's birthdays
+router.get('/birthdays/today', async (req, res) => {
+    try {
+        const today = new Date();
+        const month = today.getMonth() + 1; // Months are 0-indexed in JS
+        const day = today.getDate();
+
+        // MongoDB aggregation to match month and day of DOB
+        const birthdays = await Student.aggregate([
+            {
+                $project: {
+                    name: 1,
+                    profileImage: 1,
+                    dob: 1,
+                    month: { $month: "$dob" },
+                    day: { $dayOfMonth: "$dob" }
+                }
+            },
+            {
+                $match: {
+                    month: month,
+                    day: day
+                }
+            }
+        ]);
+
+        res.json(birthdays);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // Create student (Signup)
 router.post('/', async (req, res) => {
     try {
-        let { name, rollNo, email, password, phone, profileImage } = req.body;
+        let { name, rollNo, email, password, phone, dob, profileImage, hostelDetails, isEmailVerified, isPhoneVerified } = req.body;
 
         // Auto-generate rollNo if not provided
         if (!rollNo) {
@@ -68,7 +100,11 @@ router.post('/', async (req, res) => {
             email,
             phone,
             password: hashedPassword,
-            profileImage
+            dob,
+            profileImage,
+            hostelDetails,
+            isEmailVerified,
+            isPhoneVerified
         });
 
         const newStudent = await student.save();
@@ -78,6 +114,47 @@ router.post('/', async (req, res) => {
         });
     } catch (err) {
         res.status(400).json({ message: err.message });
+    }
+});
+
+// Update student profile
+router.put('/:rollNo', async (req, res) => {
+    try {
+        const { name, email, phone } = req.body;
+        const student = await Student.findOne({ rollNo: req.params.rollNo });
+        if (!student) return res.status(404).json({ message: 'Student not found' });
+
+        if (name) student.name = name;
+        if (email) student.email = email;
+        if (phone) student.phone = phone;
+
+        const updatedStudent = await student.save();
+        res.json({
+            message: 'Profile updated successfully',
+            student: updatedStudent
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Change password
+router.post('/change-password', async (req, res) => {
+    try {
+        const { rollNo, currentPassword, newPassword } = req.body;
+        const student = await Student.findOne({ rollNo });
+        if (!student) return res.status(404).json({ message: 'Student not found' });
+
+        const isMatch = await bcrypt.compare(currentPassword, student.password);
+        if (!isMatch) return res.status(400).json({ message: 'Invalid current password' });
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        student.password = hashedPassword;
+        await student.save();
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 });
 

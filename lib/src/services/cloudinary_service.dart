@@ -15,7 +15,7 @@ class CloudinaryService {
       FormData formData;
       if (kIsWeb) {
         formData = FormData.fromMap({
-          'file': await MultipartFile.fromBytes(
+          'file': MultipartFile.fromBytes(
             await file.readAsBytes(),
             filename: fileName,
           ),

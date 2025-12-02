@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 import '../services/payment_service.dart';
 import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
+import '../widgets/profile_style_header.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -18,6 +20,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     with TickerProviderStateMixin {
   late AnimationController _refreshController;
   late Animation<double> _refreshAnimation;
+  late AnimationController _lottieController;
 
   // Filter states
   bool _showFilters = false;
@@ -43,6 +46,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     _refreshAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _refreshController, curve: Curves.easeInOut),
     );
+    _lottieController = AnimationController(vsync: this);
     _fetchTransactions();
   }
 
@@ -77,13 +81,8 @@ class _HistoryScreenState extends State<HistoryScreen>
   @override
   void dispose() {
     _refreshController.dispose();
+    _lottieController.dispose();
     super.dispose();
-  }
-
-  void _toggleFilters() {
-    setState(() {
-      _showFilters = !_showFilters;
-    });
   }
 
   void _applyFilters() {
@@ -113,6 +112,7 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   void _openReceipt(Transaction transaction) {
     // Using root navigator to ensure proper context management
+    // Using root navigator to ensure proper context management
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -127,67 +127,305 @@ class _HistoryScreenState extends State<HistoryScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      appBar: AppBar(
-        backgroundColor: AppColors.surface(context),
-        title: Text(
-          'Transaction History',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary(context),
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            color: AppColors.textPrimary(context),
-          ),
-          onPressed: () {
-            // Navigate to the home screen when back button is pressed
-            context.go('/home');
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _showFilters ? Icons.filter_alt_off : Icons.filter_alt,
-              color: AppColors.textPrimary(context),
-            ),
-            onPressed: _toggleFilters,
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.download_outlined,
-              color: AppColors.textPrimary(context),
-            ),
-            onPressed: () {
-              // Download all transactions
-            },
-          ),
-        ],
-        elevation: 0,
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _refreshController.forward().then((_) {
-            _refreshController.reset();
-          });
-          // Refresh logic
-          await _fetchTransactions();
-        },
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // Filters panel
-              if (_showFilters) _buildFiltersPanel(),
-
-              // Transaction list
-              _buildTransactionList(),
+      body: Column(
+        children: [
+          ProfileStyleHeader(
+            title: 'History',
+            actions: [
+              IconButton(
+                icon: Icon(
+                  _showFilters ? Icons.filter_list_off : Icons.filter_list,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _showFilters = !_showFilters;
+                  });
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.download, color: Colors.white),
+                onPressed: () {
+                  // Download statement functionality
+                },
+              ),
             ],
           ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                _refreshController.forward().then((_) {
+                  _refreshController.reset();
+                });
+                // Refresh logic
+                await _fetchTransactions();
+              },
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  // Filters panel
+                  if (_showFilters)
+                    SliverToBoxAdapter(child: _buildFiltersPanel()),
+
+                  // Transaction list or Empty/Loading state
+                  _buildTransactionSlivers(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransactionSlivers() {
+    if (_isLoading) {
+      return const SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_transactions.isEmpty) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: _buildEmptyState(),
+      );
+    }
+
+    // Group transactions by date
+    Map<String, List<Transaction>> groupedTransactions = {};
+    for (var transaction in _transactions) {
+      String dateGroup = _getDateGroup(transaction.date);
+      if (groupedTransactions.containsKey(dateGroup)) {
+        groupedTransactions[dateGroup]!.add(transaction);
+      } else {
+        groupedTransactions[dateGroup] = [transaction];
+      }
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        String dateGroup = groupedTransactions.keys.elementAt(index);
+        List<Transaction> transactions = groupedTransactions[dateGroup]!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Date group header
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(
+                dateGroup,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary(context),
+                ),
+              ),
+            ),
+            // Transactions for this date group
+            Column(
+              children: transactions.map((transaction) {
+                return _buildTransactionCard(transaction);
+              }).toList(),
+            ),
+          ],
+        );
+      }, childCount: groupedTransactions.keys.length),
+    );
+  }
+
+  Widget _buildTransactionCard(Transaction transaction) {
+    return GestureDetector(
+      onTap: () => _openReceipt(transaction),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(16),
+        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                // Payment method icon
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _getPaymentMethodIcon(transaction.paymentMethod),
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Transaction details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '₹${transaction.amount.toStringAsFixed(2)}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary(context),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getStatusColor(
+                                transaction.status,
+                              ).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              transaction.status,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _getStatusColor(transaction.status),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('hh:mm a').format(transaction.date),
+                            style: GoogleFonts.roboto(
+                              fontSize: 12,
+                              color: AppColors.textSecondaryLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // Arrow icon
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: AppColors.textSecondaryLight,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Additional details
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  transaction.id,
+                  style: GoogleFonts.roboto(
+                    fontSize: 12,
+                    color: AppColors.textSecondaryLight,
+                  ),
+                ),
+                Text(
+                  transaction.paymentMethod,
+                  style: GoogleFonts.roboto(
+                    fontSize: 12,
+                    color: AppColors.textSecondaryLight,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Lottie.asset(
+            'assets/lottie/No Data Animation.json',
+            controller: _lottieController,
+            height: 180,
+            onLoaded: (composition) {
+              _lottieController
+                ..duration = composition.duration * (1)
+                ..repeat();
+            },
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'No Transactions Yet',
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your transaction history will appear here',
+            style: GoogleFonts.roboto(
+              fontSize: 14,
+              color: AppColors.textSecondaryLight,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getPaymentMethodIcon(String method) {
+    switch (method) {
+      case 'UPI':
+        return Icons.account_balance_wallet_outlined;
+      case 'Card':
+        return Icons.credit_card_outlined;
+      case 'Net Banking':
+        return Icons.account_balance_outlined;
+      case 'Wallet':
+        return Icons.account_balance_wallet_outlined;
+      default:
+        return Icons.payment_outlined;
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Success':
+        return AppColors.success;
+      case 'Pending':
+        return AppColors.warning;
+      case 'Failed':
+        return AppColors.error;
+      default:
+        return AppColors.textSecondaryLight;
+    }
+  }
+
+  String _getDateGroup(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final thisWeek = DateTime(now.year, now.month, now.day - 7);
+
+    if (date.isAfter(today)) {
+      return 'Today';
+    } else if (date.isAfter(yesterday)) {
+      return 'Yesterday';
+    } else if (date.isAfter(thisWeek)) {
+      return 'This Week';
+    } else {
+      return DateFormat('MMMM yyyy').format(date);
+    }
   }
 
   Widget _buildFiltersPanel() {
@@ -436,248 +674,6 @@ class _HistoryScreenState extends State<HistoryScreen>
         ),
       ),
     );
-  }
-
-  Widget _buildTransactionList() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_transactions.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    // Group transactions by date
-    Map<String, List<Transaction>> groupedTransactions = {};
-    for (var transaction in _transactions) {
-      String dateGroup = _getDateGroup(transaction.date);
-      if (groupedTransactions.containsKey(dateGroup)) {
-        groupedTransactions[dateGroup]!.add(transaction);
-      } else {
-        groupedTransactions[dateGroup] = [transaction];
-      }
-    }
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: groupedTransactions.keys.length,
-      itemBuilder: (context, index) {
-        String dateGroup = groupedTransactions.keys.elementAt(index);
-        List<Transaction> transactions = groupedTransactions[dateGroup]!;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Date group header
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(
-                dateGroup,
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary(context),
-                ),
-              ),
-            ),
-            // Transactions for this date group
-            Column(
-              children: transactions.map((transaction) {
-                return _buildTransactionCard(transaction);
-              }).toList(),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTransactionCard(Transaction transaction) {
-    return GestureDetector(
-      onTap: () => _openReceipt(transaction),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.all(16),
-        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                // Payment method icon
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _getPaymentMethodIcon(transaction.paymentMethod),
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                // Transaction details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '₹${transaction.amount.toStringAsFixed(2)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary(context),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _getStatusColor(
-                                transaction.status,
-                              ).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              transaction.status,
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: _getStatusColor(transaction.status),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            DateFormat('hh:mm a').format(transaction.date),
-                            style: GoogleFonts.roboto(
-                              fontSize: 12,
-                              color: AppColors.textSecondaryLight,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Arrow icon
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: AppColors.textSecondaryLight,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Additional details
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  transaction.id,
-                  style: GoogleFonts.roboto(
-                    fontSize: 12,
-                    color: AppColors.textSecondaryLight,
-                  ),
-                ),
-                Text(
-                  transaction.paymentMethod,
-                  style: GoogleFonts.roboto(
-                    fontSize: 12,
-                    color: AppColors.textSecondaryLight,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.history_outlined,
-            size: 80,
-            color: AppColors.textSecondaryLight.withOpacity(0.5),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No Transactions Yet',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your transaction history will appear here',
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              color: AppColors.textSecondaryLight,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  IconData _getPaymentMethodIcon(String method) {
-    switch (method) {
-      case 'UPI':
-        return Icons.account_balance_wallet_outlined;
-      case 'Card':
-        return Icons.credit_card_outlined;
-      case 'Net Banking':
-        return Icons.account_balance_outlined;
-      case 'Wallet':
-        return Icons.account_balance_wallet_outlined;
-      default:
-        return Icons.payment_outlined;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Success':
-        return AppColors.success;
-      case 'Pending':
-        return AppColors.warning;
-      case 'Failed':
-        return AppColors.error;
-      default:
-        return AppColors.textSecondaryLight;
-    }
-  }
-
-  String _getDateGroup(DateTime date) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = DateTime(now.year, now.month, now.day - 1);
-    final thisWeek = DateTime(now.year, now.month, now.day - 7);
-
-    if (date.isAfter(today)) {
-      return 'Today';
-    } else if (date.isAfter(yesterday)) {
-      return 'Yesterday';
-    } else if (date.isAfter(thisWeek)) {
-      return 'This Week';
-    } else {
-      return DateFormat('MMMM yyyy').format(date);
-    }
   }
 }
 

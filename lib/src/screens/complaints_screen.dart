@@ -9,8 +9,9 @@ import '../services/cloudinary_service.dart';
 import '../services/api_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
-import '../widgets/animations/famt_loader.dart';
+
 import 'complaint_history_screen.dart';
+import '../widgets/profile_style_header.dart';
 import '../services/auth_service.dart';
 
 class ComplaintsScreen extends StatefulWidget {
@@ -27,9 +28,6 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
   final FocusNode _messageFocusNode = FocusNode();
 
   // Animation controllers
-  late AnimationController _headerController;
-  late Animation<double> _headerFadeAnimation;
-  late Animation<Offset> _headerSlideAnimation;
 
   // State variables
   final List<ChatMessage> _messages = [];
@@ -58,27 +56,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
     super.initState();
 
     // Initialize animations
-    _headerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    _headerFadeAnimation = CurvedAnimation(
-      parent: _headerController,
-      curve: Curves.easeOut,
-    );
-
-    _headerSlideAnimation =
-        Tween<Offset>(begin: const Offset(0, -0.3), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _headerController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
 
     // Start animations
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _headerController.forward();
       _loadUser();
     });
 
@@ -108,7 +88,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
     _scrollController.dispose();
     _messageController.dispose();
     _messageFocusNode.dispose();
-    _headerController.dispose();
+    _messageFocusNode.dispose();
     super.dispose();
   }
 
@@ -274,7 +254,74 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
       body: Column(
         children: [
           // Header
-          _buildHeader(),
+          ProfileStyleHeader(
+            title: 'Complaint Support',
+            subtitle: 'Student ID: STU12345',
+            showBackButton: true,
+            onBackTap: () => context.pop(),
+            actions: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ComplaintHistoryScreen(),
+                      ),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.history,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: AppColors.accent.withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Online',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
 
           // Chat messages
           Expanded(
@@ -321,153 +368,6 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return SlideTransition(
-      position: _headerSlideAnimation,
-      child: FadeTransition(
-        opacity: _headerFadeAnimation,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.primary,
-                AppColors.primary.withValues(alpha: 0.8),
-              ],
-            ),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(30),
-              bottomRight: Radius.circular(30),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              // App bar
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Back button
-                  GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.2),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back_ios_new,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-
-                  // Title and subtitle
-                  Column(
-                    children: [
-                      Text(
-                        'Complaint Support',
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Student ID: STU12345',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Status badge
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const ComplaintHistoryScreen(),
-                          ),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.history,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: AppColors.accent.withOpacity(0.5),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.accent,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Online',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -620,50 +520,56 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
         const SizedBox(height: 12),
         Row(
           children: [
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _showAttachmentOptions = true;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: NeumorphicStyle.buttonDecoration(
-                  context,
-                  borderRadius: 20,
-                  color: AppColors.primary,
-                ),
-                child: Text(
-                  'Yes, Attach',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showAttachmentOptions = true;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: NeumorphicStyle.buttonDecoration(
+                    context,
+                    borderRadius: 20,
+                    color: AppColors.primary,
+                  ),
+                  child: Text(
+                    'Yes, Attach',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 12),
-            GestureDetector(
-              onTap: _submitComplaint,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                decoration: NeumorphicStyle.cardDecoration(
-                  context,
-                  borderRadius: 20,
-                ),
-                child: Text(
-                  'No, Submit',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textPrimary(context),
+            Expanded(
+              child: GestureDetector(
+                onTap: _submitComplaint,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: NeumorphicStyle.cardDecoration(
+                    context,
+                    borderRadius: 20,
+                  ),
+                  child: Text(
+                    'No, Submit',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textPrimary(context),
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
@@ -677,7 +583,18 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
   Widget _buildSubmittingMessage() {
     return Row(
       children: [
-        const SizedBox(width: 20, height: 20, child: FamtLoader()),
+        Lottie.asset(
+          'assets/lottie/loading animation.json', // Placeholder for broken complaint_processing.lottie
+          height: 50,
+          width: 50,
+          errorBuilder: (context, error, stackTrace) {
+            return const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            );
+          },
+        ),
         const SizedBox(width: 12),
         Text(
           'Submitting your complaint...',

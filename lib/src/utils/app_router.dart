@@ -18,6 +18,9 @@ import '../screens/settings_screen.dart';
 import '../screens/about_screen.dart';
 import '../screens/emergency_support_screen.dart';
 import '../screens/all_receipts_screen.dart';
+import '../screens/profile/edit_profile_screen.dart';
+import '../screens/profile/change_password_screen.dart';
+import '../screens/profile/id_card_screen.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../theme/animations.dart';
 
@@ -196,6 +199,27 @@ class AppRouter {
         pageBuilder: (context, state) => AppAnimations.transitionPage(
           key: state.pageKey,
           child: const AllReceiptsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/edit-profile',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const EditProfileScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/change-password',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const ChangePasswordScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/id-card',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const IdCardScreen(),
         ),
       ),
     ],

@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
-import '../theme/colors.dart';
-import '../theme/neumorphism.dart';
 import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,629 +17,673 @@ class StudentRegistrationScreen extends StatefulWidget {
       _StudentRegistrationScreenState();
 }
 
-class _StudentRegistrationScreenState extends State<StudentRegistrationScreen>
-    with TickerProviderStateMixin {
-  // Controllers for form fields
+class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   final TextEditingController _fullNameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final TextEditingController _hostelNameController = TextEditingController();
+  final TextEditingController _roomNoController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
 
-  // Form validation
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final Map<int, GlobalKey<FormState>> _formKeys = <int, GlobalKey<FormState>>{
+    0: GlobalKey<FormState>(),
+    1: GlobalKey<FormState>(),
+    2: GlobalKey<FormState>(),
+  };
+
   XFile? _profileImage;
+  DateTime? _selectedDate;
   bool _isSubmitting = false;
   bool _showSuccess = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isHostelite = false;
+  bool _isEmailVerified = false;
+  bool _isPhoneVerified = false;
+  int _currentStep = 0;
 
   final AuthService _authService = AuthService();
 
-  // Animation controllers
-  late AnimationController _slideController;
-  late Animation<Offset> _slideAnimation;
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Initialize animations
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
-          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-        );
-
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOut,
-    );
-
-    // Start animations
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _slideController.forward();
-      _fadeController.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _fullNameController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    _slideController.dispose();
-    _fadeController.dispose();
-    super.dispose();
-  }
-
-  // Handle form submission
   Future<void> _submitForm() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isSubmitting = true;
+    if (!_formKeys[2]!.currentState!.validate()) return;
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your Date of Birth')),
+      );
+      return;
+    }
+    if (!_isEmailVerified || !_isPhoneVerified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please verify both Email & Phone')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      String? imageUrl;
+      if (_profileImage != null) {
+        imageUrl = await CloudinaryService().uploadImage(_profileImage!);
+      }
+
+      final response = await _authService.signup({
+        'name': _fullNameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'password': _passwordController.text,
+        'dob': _selectedDate?.toIso8601String(),
+        'profileImage': imageUrl,
+        'hostelDetails': {
+          'isHostelite': _isHostelite,
+          'hostelName': _isHostelite ? _hostelNameController.text.trim() : '',
+          'roomNo': _isHostelite ? _roomNoController.text.trim() : '',
+        },
       });
 
-      try {
-        String? imageUrl;
-        if (_profileImage != null) {
-          final cloudinary = CloudinaryService();
-          imageUrl = await cloudinary.uploadImage(_profileImage!);
-        }
-
-        final response = await _authService.signup({
-          'name': _fullNameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'phone': _phoneController.text.trim(),
-          'password': _passwordController.text.trim(),
-          'profileImage': imageUrl,
-        });
-
-        if (response['success']) {
-          final studentId = response['studentId'];
-          setState(() {
-            _isSubmitting = false;
-            _showSuccess = true;
-          });
-
-          // Hide success animation after delay and navigate to login
-          Future.delayed(const Duration(seconds: 3), () {
-            if (mounted) {
-              setState(() {
-                _showSuccess = false;
-              });
-              context.go('/login');
-              _showRegistrationSuccessDialog(studentId);
-            }
-          });
-        } else {
-          setState(() {
-            _isSubmitting = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response['message'] ?? 'Registration failed.'),
-            ),
-          );
-        }
-      } catch (e) {
+      if (response['success']) {
         setState(() {
           _isSubmitting = false;
+          _showSuccess = true;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+
+        await Future.delayed(const Duration(seconds: 4));
+        if (!mounted) return;
+        context.go('/login');
+        _showSuccessDialog(response['studentId']);
+      } else {
+        throw response['message'] ?? 'Registration failed';
       }
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
-  void _showRegistrationSuccessDialog(String studentId) {
+  void _showSuccessDialog(String studentId) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Registration Successful'),
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: const [
+            Icon(Icons.check_circle, color: Colors.green, size: 32),
+            SizedBox(width: 12),
+            Text(
+              'Registered Successfully!',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Your Student ID has been generated:'),
-            const SizedBox(height: 10),
+            Text('Your Student ID:', style: GoogleFonts.roboto(fontSize: 16)),
+            const SizedBox(height: 12),
             Text(
               studentId,
-              style: const TextStyle(
-                fontSize: 24,
+              style: GoogleFonts.robotoMono(
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: AppColors.primary,
+                color: const Color(0xFF1E40AF),
               ),
             ),
-            const SizedBox(height: 10),
-            const Text('Please use this ID or your email to login.'),
+            const SizedBox(height: 16),
+            const Text('Use this ID or your email to log in.'),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => context.pop(), child: const Text('OK')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E40AF),
+            ),
+            onPressed: () => context.pop(),
+            child: const Text('OK', style: TextStyle(color: Colors.white)),
+          ),
         ],
       ),
     );
   }
 
-  // Handle image selection
-  Future<void> _selectImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        _profileImage = image;
-      });
+  Future<void> _verifyContact(String type) async {
+    final controller = type == 'email' ? _emailController : _phoneController;
+    final value = controller.text.trim();
+    if (value.isEmpty) return;
+
+    setState(() => _isSubmitting = true);
+    final success = type == 'email'
+        ? await _authService.sendEmailOtp(value)
+        : await _authService.sendMobileOtp(value);
+    setState(() => _isSubmitting = false);
+
+    if (success['success']) {
+      _showOtpDialog(type, value);
     }
   }
 
-  // Handle image removal
-  void _removeImage() {
-    setState(() {
-      _profileImage = null;
-    });
+  void _showOtpDialog(String type, String contact) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Verify ${type == 'email' ? 'Email' : 'Phone'}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('OTP sent to $contact'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _otpController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                hintText: 'Enter 6-digit OTP',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final otp = _otpController.text.trim();
+              if (otp.length != 6) return;
+
+              Navigator.pop(context);
+              setState(() => _isSubmitting = true);
+
+              final verified = type == 'email'
+                  ? await _authService.verifyEmailOtp(contact, otp)
+                  : await _authService.verifyMobileOtp(contact, otp);
+
+              setState(() => _isSubmitting = false);
+
+              if (verified['success']) {
+                setState(() {
+                  if (type == 'email') {
+                    _isEmailVerified = true;
+                  } else {
+                    _isPhoneVerified = true;
+                  }
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '${type == 'email' ? 'Email' : 'Phone'} verified!',
+                    ),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'Student Registration',
+          style: GoogleFonts.inter(
+            color: Colors.black87,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: Stack(
         children: [
-          // Background gradient
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.primary,
-                  AppColors.primary.withOpacity(0.8),
-                  AppColors.backgroundLight,
-                ],
-                stops: const [0.0, 0.3, 1.0],
+          Column(
+            children: [
+              // Progress Indicator
+              LinearProgressIndicator(
+                value: (_currentStep + 1) / 3,
+                backgroundColor: Colors.grey[100],
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFF1E40AF),
+                ),
+                minHeight: 4,
               ),
-            ),
-          ),
 
-          // Main content
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              child: Column(
-                children: [
-                  // Header with logo and title
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Column(
-                      children: [
-                        // Back button and FAMT Logo
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // Back button
-                            GestureDetector(
-                              onTap: () => context.pop(),
-                              child: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withOpacity(0.2),
-                                ),
-                                child: const Icon(
-                                  Icons.arrow_back_ios_new,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            // FAMT Logo
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.surface(context),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.shadowLight,
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: Center(
-                                child: Icon(
-                                  Icons.school,
-                                  size: 40,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ),
-                            // Spacer
-                            Container(width: 40),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Title
-                        Text(
-                          'Student Registration',
-                          style: GoogleFonts.poppins(
-                            fontSize: 28,
+              // Step Title
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _getStepTitle(_currentStep),
+                          style: GoogleFonts.inter(
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-
-                        // Subtitle
-                        Text(
-                          'Create your account',
-                          style: GoogleFonts.roboto(
-                            fontSize: 16,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Form container with slide animation
-                  SlideTransition(
-                    position: _slideAnimation,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: NeumorphicStyle.cardDecoration(
-                        context,
-                        borderRadius: 25,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Profile image upload
-                              _buildProfileImageUpload(),
-
-                              const SizedBox(height: 24),
-
-                              // Full Name
-                              _buildNeumorphicTextField(
-                                controller: _fullNameController,
-                                hint: 'Full Name',
-                                icon: Icons.person_outline,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your full name';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              const SizedBox(height: 16),
-
-                              // Phone Number
-                              _buildNeumorphicTextField(
-                                controller: _phoneController,
-                                hint: 'Phone Number',
-                                icon: Icons.phone_outlined,
-                                keyboardType: TextInputType.phone,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your phone number';
-                                  }
-                                  if (value.length != 10) {
-                                    return 'Please enter a valid 10-digit phone number';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Email
-                              _buildNeumorphicTextField(
-                                controller: _emailController,
-                                hint: 'Email',
-                                icon: Icons.email_outlined,
-                                keyboardType: TextInputType.emailAddress,
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your email';
-                                  }
-                                  if (!RegExp(
-                                    r'^[^@]+@[^@]+\.[^@]+',
-                                  ).hasMatch(value)) {
-                                    return 'Please enter a valid email';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Password
-                              _buildNeumorphicTextField(
-                                controller: _passwordController,
-                                hint: 'Password',
-                                icon: Icons.lock_outline,
-                                obscureText: _obscurePassword,
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: AppColors.textSecondaryLight,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter a password';
-                                  }
-                                  if (value.length < 6) {
-                                    return 'Password must be at least 6 characters';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // Confirm Password
-                              _buildNeumorphicTextField(
-                                controller: _confirmPasswordController,
-                                hint: 'Confirm Password',
-                                icon: Icons.lock_outline,
-                                obscureText: _obscureConfirmPassword,
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscureConfirmPassword
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: AppColors.textSecondaryLight,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscureConfirmPassword =
-                                          !_obscureConfirmPassword;
-                                    });
-                                  },
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please confirm your password';
-                                  }
-                                  if (value != _passwordController.text) {
-                                    return 'Passwords do not match';
-                                  }
-                                  return null;
-                                },
-                              ),
-
-                              const SizedBox(height: 32),
-
-                              // Action buttons
-                              _buildActionButtons(),
-                            ],
+                            color: Colors.black87,
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                    const Spacer(),
+                    Text(
+                      'Step ${_currentStep + 1} of 3',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ),
 
-          // Success confetti overlay
-          if (_showSuccess)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.3),
-                child: Center(
-                  child: SuccessConfetti(
-                    onCompleted: () {
-                      // Handled in _submitForm
-                    },
+              // Form Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKeys[_currentStep],
+                    child: _buildCurrentStep(),
                   ),
                 ),
               ),
+
+              // Bottom Buttons
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Colors.grey[200]!)),
+                ),
+                child: Row(
+                  children: [
+                    if (_currentStep > 0)
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            side: BorderSide(color: Colors.grey[300]!),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () => setState(() => _currentStep--),
+                          child: Text(
+                            'Back',
+                            style: GoogleFonts.inter(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_currentStep > 0) const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E40AF),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          if (_currentStep < 2) {
+                            if (_formKeys[_currentStep]!.currentState!
+                                .validate()) {
+                              setState(() => _currentStep++);
+                            }
+                          } else {
+                            _submitForm();
+                          }
+                        },
+                        child: Text(
+                          _currentStep == 2 ? 'Create Account' : 'Next',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Overlays
+          if (_isSubmitting)
+            Container(
+              color: Colors.black54,
+              child: const Center(child: FamtLoader()),
             ),
 
-          // Loading overlay
-          if (_isSubmitting)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.3),
-                child: const Center(child: FamtLoader()),
-              ),
+          if (_showSuccess)
+            Container(
+              color: Colors.black54,
+              child: Center(child: SuccessConfetti(onCompleted: () {})),
             ),
         ],
       ),
     );
   }
 
-  // Build profile image upload widget
-  Widget _buildProfileImageUpload() {
+  String _getStepTitle(int step) {
+    switch (step) {
+      case 0:
+        return 'Personal Details';
+      case 1:
+        return 'Hostel Information';
+      case 2:
+        return 'Security';
+      default:
+        return '';
+    }
+  }
+
+  Widget _buildCurrentStep() {
+    switch (_currentStep) {
+      case 0:
+        return _buildPersonalStep();
+      case 1:
+        return _buildHostelStep();
+      case 2:
+        return _buildSecurityStep();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildPersonalStep() => Column(
+    children: [
+      _buildProfileImagePicker(),
+      const SizedBox(height: 32),
+      _buildTextField(_fullNameController, 'Full Name', Icons.person_outline),
+      const SizedBox(height: 20),
+      // Date of Birth Picker
+      GestureDetector(
+        onTap: () async {
+          final DateTime? picked = await showDatePicker(
+            context: context,
+            initialDate: DateTime.now().subtract(
+              const Duration(days: 365 * 18),
+            ),
+            firstDate: DateTime(1990),
+            lastDate: DateTime.now(),
+          );
+          if (picked != null) {
+            setState(() {
+              _selectedDate = picked;
+            });
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.calendar_today, color: Colors.grey[600], size: 22),
+              const SizedBox(width: 12),
+              Text(
+                _selectedDate == null
+                    ? 'Date of Birth'
+                    : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+                style: GoogleFonts.inter(
+                  color: _selectedDate == null
+                      ? Colors.grey[600]
+                      : Colors.black87,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 20),
+      Row(
+        children: [
+          Expanded(
+            child: _buildTextField(
+              _emailController,
+              'Email Address',
+              Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ),
+          const SizedBox(width: 10),
+          _verifyButton('email', _isEmailVerified),
+        ],
+      ),
+      const SizedBox(height: 20),
+      Row(
+        children: [
+          Expanded(
+            child: _buildTextField(
+              _phoneController,
+              'Phone Number',
+              Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+            ),
+          ),
+          const SizedBox(width: 10),
+          _verifyButton('mobile', _isPhoneVerified),
+        ],
+      ),
+    ],
+  );
+
+  Widget _buildHostelStep() => Column(
+    children: [
+      SwitchListTile(
+        title: const Text(
+          'I stay in college hostel',
+          style: TextStyle(fontSize: 17),
+        ),
+        value: _isHostelite,
+        activeThumbColor: const Color(0xFF1E40AF),
+        onChanged: (v) => setState(() => _isHostelite = v),
+      ),
+      if (_isHostelite) ...[
+        const SizedBox(height: 20),
+        _buildTextField(_hostelNameController, 'Hostel Name', Icons.apartment),
+        const SizedBox(height: 20),
+        _buildTextField(
+          _roomNoController,
+          'Room Number',
+          Icons.door_front_door_outlined,
+        ),
+      ],
+    ],
+  );
+
+  Widget _buildSecurityStep() => Column(
+    children: [
+      _buildTextField(
+        _passwordController,
+        'Create Password',
+        Icons.lock_outline,
+        obscureText: _obscurePassword,
+        suffixIcon: _togglePasswordVisibility(
+          () => _obscurePassword = !_obscurePassword,
+        ),
+      ),
+      const SizedBox(height: 20),
+      _buildTextField(
+        _confirmPasswordController,
+        'Confirm Password',
+        Icons.lock_outline,
+        obscureText: _obscureConfirmPassword,
+        suffixIcon: _togglePasswordVisibility(
+          () => _obscureConfirmPassword = !_obscureConfirmPassword,
+        ),
+        validator: (v) =>
+            v != _passwordController.text ? 'Passwords do not match' : null,
+      ),
+    ],
+  );
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      validator: validator ?? (v) => v!.trim().isEmpty ? 'Required' : null,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.inter(color: Colors.grey[600]),
+        prefixIcon: Icon(icon, color: Colors.grey[600], size: 22),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.red[400]!),
+        ),
+      ),
+    );
+  }
+
+  Widget _togglePasswordVisibility(VoidCallback onTap) {
+    return IconButton(
+      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+      onPressed: onTap,
+    );
+  }
+
+  Widget _verifyButton(String type, bool verified) {
+    return SizedBox(
+      width: 80,
+      child: verified
+          ? const Icon(Icons.check_circle, color: Colors.green, size: 32)
+          : OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                side: const BorderSide(color: Color(0xFF1E40AF)),
+              ),
+              onPressed: () => _verifyContact(type),
+              child: const Text('Verify', style: TextStyle(fontSize: 13)),
+            ),
+    );
+  }
+
+  Widget _buildProfileImagePicker() {
     return Center(
       child: Stack(
         children: [
           Container(
-            width: 100,
-            height: 100,
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.surface(context),
+              border: Border.all(color: const Color(0xFF1E40AF), width: 4),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.shadowDark.withOpacity(0.1),
-                  offset: const Offset(4, 4),
-                  blurRadius: 10,
-                ),
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.8),
-                  offset: const Offset(-4, -4),
-                  blurRadius: 10,
+                  color: Colors.black26,
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
-            child: _profileImage != null
-                ? ClipOval(
-                    child: kIsWeb
+            child: ClipOval(
+              child: _profileImage == null
+                  ? Container(
+                      color: Colors.grey[200],
+                      child: const Icon(
+                        Icons.person,
+                        size: 60,
+                        color: Colors.grey,
+                      ),
+                    )
+                  : (kIsWeb
                         ? Image.network(_profileImage!.path, fit: BoxFit.cover)
                         : Image.file(
                             File(_profileImage!.path),
                             fit: BoxFit.cover,
-                          ),
-                  )
-                : Icon(
-                    Icons.person,
-                    size: 50,
-                    color: AppColors.textSecondaryLight,
-                  ),
+                          )),
+            ),
           ),
           Positioned(
             bottom: 0,
             right: 0,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface(context),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.shadowLight,
-                    blurRadius: 8,
-                    offset: const Offset(2, 2),
-                  ),
-                ],
-              ),
-              child: PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.camera_alt,
-                  size: 20,
-                  color: AppColors.primary,
+            child: GestureDetector(
+              onTap: () async {
+                final picker = ImagePicker();
+                final image = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 85,
+                );
+                if (image != null) setState(() => _profileImage = image);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E40AF),
+                  shape: BoxShape.circle,
                 ),
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    _selectImage();
-                  } else if (value == 'remove') {
-                    _removeImage();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                  const PopupMenuItem(value: 'remove', child: Text('Remove')),
-                ],
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  // Build neumorphic text field
-  Widget _buildNeumorphicTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    TextInputType? keyboardType,
-    bool enabled = true,
-    String? Function(String?)? validator,
-    bool obscureText = false,
-    Widget? suffixIcon,
-  }) {
-    return Container(
-      decoration: NeumorphicStyle.cardDecoration(
-        context,
-        borderRadius: 20,
-        shadowIntensity: enabled ? 0.1 : 0.05,
-        color: enabled ? null : AppColors.background(context),
-      ),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        enabled: enabled,
-        validator: validator,
-        obscureText: obscureText,
-        style: GoogleFonts.roboto(
-          fontSize: 16,
-          color: AppColors.textPrimary(context),
-        ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: GoogleFonts.roboto(
-            fontSize: 16,
-            color: AppColors.textSecondaryLight.withOpacity(0.7),
-          ),
-          prefixIcon: Icon(icon, color: AppColors.primary.withOpacity(0.7)),
-          suffixIcon: suffixIcon,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 18,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Build action buttons
-  Widget _buildActionButtons() {
-    return Column(
-      children: [
-        // Submit button
-        GestureDetector(
-          onTap: _isSubmitting ? null : _submitForm,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 18),
-            decoration: NeumorphicStyle.buttonDecoration(
-              context,
-              borderRadius: 20,
-              color: _isSubmitting
-                  ? AppColors.textSecondaryLight
-                  : AppColors.primary,
-            ),
-            child: Center(
-              child: Text(
-                'Register',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

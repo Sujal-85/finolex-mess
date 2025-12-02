@@ -19,21 +19,9 @@ class AboutService {
   List<Developer> getDevelopers() {
     return [
       Developer(
-        name: 'John Doe',
-        role: 'Lead Developer',
-        contact: 'johndoe@example.com',
-        imageUrl: 'assets/images/profile_placeholder.png',
-      ),
-      Developer(
-        name: 'Jane Smith',
-        role: 'UI/UX Designer',
-        contact: 'janesmith@example.com',
-        imageUrl: 'assets/images/profile_placeholder.png',
-      ),
-      Developer(
-        name: 'Robert Johnson',
-        role: 'Backend Engineer',
-        contact: 'robertj@example.com',
+        name: 'Sujal Sadanand Khedekar',
+        role: 'Lead Developer & Creator',
+        contact: 'khedekarsujay720@gmail.com',
         imageUrl: 'assets/images/profile_placeholder.png',
       ),
     ];

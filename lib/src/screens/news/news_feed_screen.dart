@@ -11,7 +11,7 @@ import '../../blocs/news/news_event.dart';
 import '../../blocs/news/news_state.dart';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
-import '../../widgets/famt_app_bar.dart';
+import '../../widgets/profile_style_header.dart';
 import '../../widgets/skeletons/news_skeleton_pro.dart';
 
 class NewsFeedScreen extends StatelessWidget {
@@ -52,98 +52,124 @@ class _NewsFeedViewState extends State<_NewsFeedView>
   @override
   Widget build(BuildContext context) {
     // Check if we can pop (i.e., if there's a previous route)
-    final canPop = Navigator.of(context).canPop();
-    
+    // Check if we can pop (i.e., if there's a previous route)
+    // final canPop = Navigator.of(context).canPop();
+
     return Scaffold(
       backgroundColor: AppColors.background(context),
-      appBar: FamtAppBar(
-        title: 'College News',
-        showProfile: true,
-        showBackButton: canPop, // Only show back button if we can pop
-        onBackTap: () => context.pop(), // Use GoRouter's pop
-        onNotificationTap: () {},
-        onProfileTap: () {},
-      ),
-      body: BlocBuilder<NewsBloc, NewsState>(
-        builder: (context, state) {
-          if (state.status == NewsStatus.loading && state.newsItems.isEmpty) {
-            return const NewsSkeletonPro(); // Your pro skeleton
-          }
-
-          if (state.status == NewsStatus.failure) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Lottie.asset('assets/lottie/no_connection.json', height: 180),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Oops! Something went wrong',
-                    style: GoogleFonts.poppins(fontSize: 18),
-                  ),
-                  Text(
-                    state.errorMessage ?? '',
-                    style: GoogleFonts.roboto(color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () =>
-                        context.read<NewsBloc>().add(NewsRefreshRequested()),
-                    child: const Text('Retry'),
-                  ),
-                ],
+      body: Column(
+        children: [
+          ProfileStyleHeader(
+            title: 'College News',
+            showBackButton: true,
+            onBackTap: () => context.go('/home'),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.notifications_outlined,
+                  color: Colors.white,
+                ),
+                onPressed: () {},
               ),
-            );
-          }
+              IconButton(
+                icon: const Icon(Icons.person_outline, color: Colors.white),
+                onPressed: () {},
+              ),
+            ],
+          ),
+          Expanded(
+            child: BlocBuilder<NewsBloc, NewsState>(
+              builder: (context, state) {
+                if (state.status == NewsStatus.loading &&
+                    state.newsItems.isEmpty) {
+                  return const NewsSkeletonPro(); // Your pro skeleton
+                }
 
-          if (state.newsItems.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Lottie.asset('assets/lottie/empty_news.json', height: 200),
-                  const SizedBox(height: 24),
-                  Text(
-                    'No news yet',
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
+                if (state.status == NewsStatus.failure) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Lottie.asset(
+                          'assets/lottie/no_connection.json',
+                          height: 180,
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Oops! Something went wrong',
+                          style: GoogleFonts.poppins(fontSize: 18),
+                        ),
+                        Text(
+                          state.errorMessage ?? '',
+                          style: GoogleFonts.roboto(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => context.read<NewsBloc>().add(
+                            NewsRefreshRequested(),
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                      ],
                     ),
-                  ),
-                  Text(
-                    'Check back later!',
-                    style: GoogleFonts.roboto(color: Colors.grey),
-                  ),
-                ],
-              ),
-            );
-          }
+                  );
+                }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              _refreshController.reset();
-              context.read<NewsBloc>().add(NewsRefreshRequested());
-              await Future.delayed(const Duration(milliseconds: 1200));
-            },
-            displacement: 80,
-            child: ListView.builder(
-              physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics(),
-              ),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-              itemCount: state.newsItems.length,
-              itemBuilder: (context, index) {
-                final item = state.newsItems[index];
-                final isRead = false; // You can track read status later
+                if (state.newsItems.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Lottie.asset('assets/lottie/no news.json', height: 200),
+                        const SizedBox(height: 24),
+                        Text(
+                          'No news yet',
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'Check back later!',
+                          style: GoogleFonts.roboto(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: NewsCardPro(item: item, isRead: isRead, index: index),
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    _refreshController.reset();
+                    context.read<NewsBloc>().add(NewsRefreshRequested());
+                    await Future.delayed(const Duration(milliseconds: 1200));
+                  },
+                  displacement: 80,
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                    itemCount: state.newsItems.length,
+                    itemBuilder: (context, index) {
+                      final item = state.newsItems[index];
+                      final isRead = false; // You can track read status later
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        child: NewsCardPro(
+                          item: item,
+                          isRead: isRead,
+                          index: index,
+                        ),
+                      );
+                    },
+                  ),
                 );
               },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }

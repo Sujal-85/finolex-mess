@@ -30,6 +30,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final profileImage = user?['profileImage'];
       final balance = (user?['balance'] ?? 0).toDouble();
 
+      final hostelDetails = user?['hostelDetails'] ?? {};
+      final hostelBlock = hostelDetails['hostelName'] ?? 'Not Assigned';
+      final roomNumber = hostelDetails['roomNo'] ?? 'N/A';
+
+      // Fetch birthdays
+      final birthdayResponse = await api.get('/students/birthdays/today');
+      final birthdays = List<Map<String, dynamic>>.from(birthdayResponse.data);
+
       emit(
         DashboardLoaded(
           balance: balance,
@@ -38,6 +46,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           latestAnnouncement: latestAnnouncement,
           studentName: studentName,
           profileImage: profileImage,
+          hostelBlock: hostelBlock,
+          roomNumber: roomNumber,
+          birthdays: birthdays,
         ),
       );
     } catch (e) {
@@ -57,6 +68,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final profileImage = user?['profileImage'];
       final balance = (user?['balance'] ?? 0).toDouble();
 
+      final hostelDetails = user?['hostelDetails'] ?? {};
+      final hostelBlock = hostelDetails['hostelName'] ?? 'Not Assigned';
+      final roomNumber = hostelDetails['roomNo'] ?? 'N/A';
+
+      final api = ApiService();
+      final birthdayResponse = await api.get('/students/birthdays/today');
+      final birthdays = List<Map<String, dynamic>>.from(birthdayResponse.data);
+
       emit(
         DashboardLoaded(
           balance: balance,
@@ -65,6 +84,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           latestAnnouncement: 'Mess closed on Sunday evening',
           studentName: studentName,
           profileImage: profileImage,
+          hostelBlock: hostelBlock,
+          roomNumber: roomNumber,
+          birthdays: birthdays,
         ),
       );
     } catch (e) {
