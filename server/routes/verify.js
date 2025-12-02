@@ -8,9 +8,7 @@ const otpStore = new Map();
 
 // Email Transporter
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, // true for 465, false for other ports
+    service: 'gmail',
     auth: {
         user: 'khedekarsujay720@gmail.com',
         pass: 'hmil kblm wgaq cbqd'
