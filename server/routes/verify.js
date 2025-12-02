@@ -11,10 +11,17 @@ const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 587,
     secure: false, // true for 465, false for other ports
+    requireTLS: true,
     auth: {
         user: 'khedekarsujay720@gmail.com',
         pass: 'hmil kblm wgaq cbqd'
-    }
+    },
+    tls: {
+        rejectUnauthorized: false
+    },
+    connectionTimeout: 10000, // 10 seconds
+    logger: true,
+    debug: true
 });
 
 // Verify connection configuration
