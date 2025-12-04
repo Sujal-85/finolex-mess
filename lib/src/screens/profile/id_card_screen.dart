@@ -5,6 +5,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
 import '../../services/auth_service.dart';
@@ -80,6 +83,31 @@ class _IdCardScreenState extends State<IdCardScreen> {
     }
   }
 
+  Future<void> _shareIdCard() async {
+    try {
+      final Uint8List? image = await _screenshotController.capture();
+
+      if (image != null) {
+        final directory = await getTemporaryDirectory();
+        final imagePath = await File('${directory.path}/id_card.png').create();
+        await imagePath.writeAsBytes(image);
+
+        await Share.shareXFiles([
+          XFile(imagePath.path),
+        ], text: 'Here is my FAMT Digital ID Card');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sharing ID Card: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -101,7 +129,7 @@ class _IdCardScreenState extends State<IdCardScreen> {
                             child: _buildIdCard(),
                           ),
                           const SizedBox(height: 40),
-                          _buildDownloadButton(),
+                          _buildActionButtons(),
                         ],
                       ),
                     ),
@@ -339,33 +367,73 @@ class _IdCardScreenState extends State<IdCardScreen> {
     );
   }
 
-  Widget _buildDownloadButton() {
-    return GestureDetector(
-      onTap: _downloadIdCard,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: NeumorphicStyle.buttonDecoration(
-          context,
-          borderRadius: 15,
-          color: AppColors.surface(context),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.download_rounded, color: AppColors.primary),
-            const SizedBox(width: 12),
-            Text(
-              'Download ID Card',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary(context),
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: _shareIdCard,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: NeumorphicStyle.buttonDecoration(
+                context,
+                borderRadius: 15,
+                color: AppColors.surface(context),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.share_rounded, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Share',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary(context),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: GestureDetector(
+            onTap: _downloadIdCard,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.download_rounded, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Download',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

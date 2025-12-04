@@ -4,8 +4,8 @@ class ApiService {
   static final ApiService _instance = ApiService._internal();
   late Dio _dio;
   final String baseUrl =
-      'https://finolex-mess.onrender.com/api';
-      // 'http://localhost:3000/api' // Use 10.0.2.2 for Android emulator
+      // 'https://finolex-mess.onrender.com/api';
+      'http://localhost:3000/api'; // Use 10.0.2.2 for Android emulator
 
   factory ApiService() {
     return _instance;

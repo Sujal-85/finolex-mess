@@ -11,6 +11,7 @@ class ProfileStyleHeader extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? child;
   final double padding;
+  final bool centerTitle;
 
   const ProfileStyleHeader({
     super.key,
@@ -21,6 +22,7 @@ class ProfileStyleHeader extends StatelessWidget {
     this.actions,
     this.child,
     this.padding = 24.0,
+    this.centerTitle = false,
   });
 
   @override
@@ -74,7 +76,7 @@ class ProfileStyleHeader extends StatelessWidget {
                 if (showBackButton) const SizedBox(width: 16),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: showBackButton
+                    crossAxisAlignment: (showBackButton && !centerTitle)
                         ? CrossAxisAlignment.start
                         : CrossAxisAlignment.center,
                     children: [
@@ -85,7 +87,7 @@ class ProfileStyleHeader extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
                         ),
-                        textAlign: showBackButton
+                        textAlign: (showBackButton && !centerTitle)
                             ? TextAlign.left
                             : TextAlign.center,
                       ),
@@ -98,7 +100,7 @@ class ProfileStyleHeader extends StatelessWidget {
                             fontWeight: FontWeight.w400,
                             color: Colors.white.withOpacity(0.9),
                           ),
-                          textAlign: showBackButton
+                          textAlign: (showBackButton && !centerTitle)
                               ? TextAlign.left
                               : TextAlign.center,
                         ),

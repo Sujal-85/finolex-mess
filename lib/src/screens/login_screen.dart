@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import '../services/auth_service.dart';
+import '../services/local_notification_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 
@@ -79,6 +80,13 @@ class _LoginScreenState extends State<LoginScreen>
         await Future.delayed(
           const Duration(seconds: 3),
         ); // Adjust based on animation length
+        // Show Welcome Notification
+        await LocalNotificationService().showNotification(
+          id: 1,
+          title: 'Welcome to Prasanna Caterers! 👋',
+          body: 'We are glad to have you back. Check out today\'s menu!',
+        );
+
         if (mounted) context.go('/home');
       } else {
         setState(() => _errorMessage = 'Invalid credentials');

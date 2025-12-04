@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 import '../../blocs/menu/menu_bloc.dart';
 import '../../blocs/menu/menu_event.dart';
 import '../../blocs/menu/menu_state.dart';
@@ -58,8 +59,26 @@ class _MenuView extends StatelessWidget {
                     child: Text(state.errorMessage ?? 'Error loading menu'),
                   );
                 } else if (state.menuItems.isEmpty) {
-                  return const Center(
-                    child: Text('No menu available for this day'),
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Lottie.asset(
+                          'assets/lottie/Not found error.json',
+                          width: 200,
+                          height: 200,
+                          fit: BoxFit.contain,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No menu available for this day',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            color: AppColors.textSecondaryLight,
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 }
 

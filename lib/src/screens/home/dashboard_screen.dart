@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../blocs/dashboard_bloc.dart';
 import '../../blocs/dashboard_event.dart';
 import '../../blocs/dashboard_state.dart';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
+import '../../services/local_notification_service.dart';
 import '../../widgets/dashboard_header.dart';
 import '../../widgets/dashboard/menu_card.dart';
-import '../../widgets/dashboard/balance_card.dart';
+
 import '../../widgets/dashboard/announcement_card.dart';
 import '../../widgets/dashboard/payment_due_card.dart';
 import '../../widgets/dashboard/birthday_card.dart';
+import '../../widgets/dashboard/food_quote_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -33,156 +36,226 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       body: SafeArea(
-        child: BlocBuilder<DashboardBloc, DashboardState>(
-          builder: (context, state) {
-            if (state is DashboardLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
 
-            if (state is DashboardError) {
-              return Center(child: Text('Error: ${state.message}'));
-            }
-
+        child: BlocListener<DashboardBloc, DashboardState>(
+          listener: (context, state) {
             if (state is DashboardLoaded) {
-              return RefreshIndicator(
-                onRefresh: () async {
-                  context.read<DashboardBloc>().add(
-                    DashboardRefreshRequested(),
-                  );
-                },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 100),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      DashboardHeader(
-                        studentName: state.studentName,
-                        hostelBlock: state.hostelBlock,
-                        roomNumber: state.roomNumber,
-                        notificationCount: state.unreadNotifications,
-                        profileImage: state.profileImage,
-                        onNotificationTap: () => context.push('/notifications'),
-                        onProfileTap: () => context.push('/profile'),
-                      ),
+              final notificationService = LocalNotificationService();
 
-                      const SizedBox(height: 20),
+              // Schedule Daily Meal Reminders
+              notificationService.scheduleDailyNotification(
+                id: 10,
+                title: 'Good Morning! ☀️',
+                body: 'Breakfast is ready! Start your day with a healthy meal.',
+                hour: 8,
+                minute: 0,
+              );
+              notificationService.scheduleDailyNotification(
+                id: 11,
+                title: 'Lunch Time! 🍛',
+                body: 'Don\'t forget to have your lunch. Check the menu!',
+                hour: 13,
+                minute: 0,
+              );
+              notificationService.scheduleDailyNotification(
+                id: 12,
+                title: 'Dinner is Served! 🌙',
+                body: 'Dinner is ready. Come and enjoy your meal.',
+                hour: 20,
+                minute: 0,
+              );
 
-                      // Birthday Card
-                      if (state.birthdays.isNotEmpty) ...[
+              // Schedule Menu Update Notification
+              notificationService.scheduleDailyNotification(
+                id: 20,
+                title: 'Menu Updated 📅',
+                body: 'Today\'s menu has been updated. Check it out!',
+                hour: 7,
+                minute: 0,
+              );
+
+              // Schedule Payment Due Notification if balance is low
+              if (state.balance < 3500) {
+                notificationService.scheduleDailyNotification(
+                  id: 100,
+                  title: 'Payment Due ⚠️',
+                  body: 'Your mess fees are due. Please pay to avoid penalties.',
+                  hour: 10,
+                  minute: 0,
+                );
+              } else {
+                notificationService.cancelNotification(100);
+              }
+            }
+          },
+          child: BlocBuilder<DashboardBloc, DashboardState>(
+            builder: (context, state) {
+              if (state is DashboardLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (state is DashboardError) {
+                return Center(child: Text('Error: ${state.message}'));
+              }
+
+              if (state is DashboardLoaded) {
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    context.read<DashboardBloc>().add(
+                      DashboardRefreshRequested(),
+                    );
+                  },
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header
+                        DashboardHeader(
+                          studentName: state.studentName,
+                          hostelBlock: state.hostelBlock,
+                          roomNumber: state.roomNumber,
+                          notificationCount: state.unreadNotifications,
+                          profileImage: state.profileImage,
+                          onNotificationTap: () => context.push('/notifications'),
+                          onProfileTap: () => context.push('/profile'),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Birthday Card or Quote Card
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: BirthdayCard(
-                            studentName: state.birthdays.first['name'],
-                            profileImage: state.birthdays.first['profileImage'],
-                          ),
+                          child: state.birthdays.isNotEmpty
+                              ? BirthdayCard(
+                                  studentName: state.birthdays.first['name'],
+                                  profileImage:
+                                      state.birthdays.first['profileImage'],
+                                )
+                              : const FoodQuoteCard(),
                         ),
                         const SizedBox(height: 20),
-                      ],
 
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Column(
-                          children: [
-                            // Balance & Payment Due
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: BalanceCard(balance: state.balance),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            children: [
+                              // Payment Due
+                              PaymentDueCard(
+                                amount: 3500.00,
+                                dueDate: '5th Dec',
+                                onPayNow: () => context.push('/payment'),
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Next Meal Card
+                              _buildNextMealCard(state.nextMeal),
+
+                              const SizedBox(height: 24),
+
+                              // Menu Card
+                              MenuCard(
+                                onViewFullMenu: () => context.push('/menu'),
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Quick Actions Header
+                              Text(
+                                'Quick Actions',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary(context),
                                 ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: PaymentDueCard(
-                                    amount: 3500.00,
-                                    dueDate: '5th Dec',
-                                    onPayNow: () => context.push('/payment'),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(height: 12),
 
-                            const SizedBox(height: 24),
+                              // Action Grid
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return GridView.count(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    crossAxisCount:
+                                        3, // Changed to 3 for better visibility
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                    childAspectRatio: 1.0,
+                                    children: [
+                                      _buildCompactAction(
+                                        'History',
+                                        Icons.restaurant_menu,
+                                        Colors.blue,
+                                        () => context.push('/history'),
+                                      ),
+                                      _buildCompactAction(
+                                        'Complaints',
+                                        Icons.report_problem_outlined,
+                                        Colors.orange,
+                                        () => context.push('/complaints'),
+                                      ),
+                                      _buildCompactAction(
+                                        'Support',
+                                        Icons.headset_mic_outlined,
+                                        Colors.green,
+                                        () => context.push('/emergency'),
+                                      ),
+                                      _buildCompactAction(
+                                        'Feedback',
+                                        Icons.star_outline,
+                                        Colors.amber,
+                                        () => context.push('/feedback'),
+                                      ),
+                                      _buildCompactAction(
+                                        'Rules',
+                                        Icons.gavel_outlined,
+                                        Colors.purple,
+                                        () =>
+                                            context.push('/about'), // Placeholder
+                                      ),
+                                      _buildCompactAction(
+                                        'Settings',
+                                        Icons.settings_outlined,
+                                        Colors.grey,
+                                        () => context.push('/settings'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
 
-                            // Next Meal Card
-                            _buildNextMealCard(state.nextMeal),
+                              const SizedBox(height: 24),
 
-                            const SizedBox(height: 24),
+                              // Recent Activity
+                              _buildRecentActivitySection(
+                                state.recentTransactions,
+                              ),
 
-                            // Menu Card
-                            MenuCard(
-                              onViewFullMenu: () => context.push('/menu'),
-                            ),
+                              const SizedBox(height: 24),
 
-                            const SizedBox(height: 24),
-
-                            // Action Grid
-                            LayoutBuilder(
-                              builder: (context, constraints) {
-                                return GridView.count(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  crossAxisCount:
-                                      4, // Changed to 4 for compact row
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: 0.8,
-                                  children: [
-                                    _buildCompactAction(
-                                      'History',
-                                      Icons.history,
-                                      Colors.blue,
-                                      () => context.push('/history'),
-                                    ),
-                                    _buildCompactAction(
-                                      'Support',
-                                      Icons.headset_mic_outlined,
-                                      Colors.green,
-                                      () => context.push('/emergency'),
-                                    ),
-                                    _buildCompactAction(
-                                      'Feedback',
-                                      Icons.star_outline,
-                                      Colors.amber,
-                                      () => context.push('/feedback'),
-                                    ),
-                                    _buildCompactAction(
-                                      'Settings',
-                                      Icons.settings_outlined,
-                                      Colors.grey,
-                                      () => context.push('/settings'),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Recent Activity (Placeholder)
-                            _buildRecentActivitySection(),
-
-                            const SizedBox(height: 24),
-
-                            // Announcements
-                            AnnouncementCard(
-                              announcement: state.latestAnnouncement,
-                              onTap: () => context.push('/news'),
-                            ),
-                          ],
+                              // Announcements
+                              AnnouncementCard(
+                                announcement: state.latestAnnouncement,
+                                onTap: () => context.push('/news'),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }
+                );
+              }
 
-            return const SizedBox.shrink();
-          },
+              return const SizedBox.shrink();
+            },
+          ),
         ),
       ),
+
       floatingActionButton: FloatingActionButton.large(
         onPressed: () {
           // Quick Pay
@@ -340,13 +413,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            backendNextMeal ??
-                '$mealType Menu', // Fallback to backend data or generic
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              backendNextMeal ??
+                  '$mealType Menu', // Fallback to backend data or generic
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -398,16 +475,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRecentActivitySection() {
+  Widget _buildRecentActivitySection(List<dynamic> transactions) {
+    if (transactions.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Text(
+              'Recent Activity',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: NeumorphicStyle.cardDecoration(
+              context,
+              borderRadius: 20,
+            ),
+            child: Center(
+              child: Text(
+                'No recent activity',
+                style: GoogleFonts.poppins(color: AppColors.textSecondaryLight),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Show only top 3 transactions
+    final recent = transactions.take(3).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Recent Activity',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary(context),
+        Center(
+          child: Text(
+            'Recent Activity',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary(context),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -416,19 +531,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
           child: Column(
             children: [
-              _buildActivityItem(
-                'Lunch',
-                'Today, 1:15 PM',
-                '- ₹60.00',
-                Colors.red,
-              ),
-              const Divider(height: 24),
-              _buildActivityItem(
-                'Added Money',
-                'Yesterday',
-                '+ ₹1000.00',
-                Colors.green,
-              ),
+              for (int i = 0; i < recent.length; i++) ...[
+                if (i > 0) const Divider(height: 24),
+                _buildTransactionItem(recent[i]),
+              ],
             ],
           ),
         ),
@@ -436,12 +542,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildActivityItem(
-    String title,
-    String subtitle,
-    String amount,
-    Color amountColor,
-  ) {
+  Widget _buildTransactionItem(dynamic transaction) {
+    final amount = (transaction['amount'] ?? 0).toDouble();
+    final type = transaction['type'] ?? 'debit';
+    final isCredit = type == 'credit';
+    final dateStr = transaction['date'] ?? DateTime.now().toIso8601String();
+    final date = DateTime.parse(dateStr);
+    final formattedDate = DateFormat('MMM d, h:mm a').format(date);
+    final description = transaction['description'] ?? 'Transaction';
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -449,15 +558,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              title,
+              description,
               style: GoogleFonts.poppins(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: AppColors.textPrimary(context),
               ),
             ),
+            const SizedBox(height: 4),
             Text(
-              subtitle,
+              formattedDate,
               style: GoogleFonts.roboto(
                 fontSize: 12,
                 color: AppColors.textSecondaryLight,
@@ -466,11 +576,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         Text(
-          amount,
+          '${isCredit ? '+' : '-'} ₹${amount.toStringAsFixed(2)}',
           style: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: amountColor,
+            color: isCredit ? Colors.green : Colors.red,
           ),
         ),
       ],

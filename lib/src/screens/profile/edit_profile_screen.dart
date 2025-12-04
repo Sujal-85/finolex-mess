@@ -53,8 +53,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     try {
       final user = await _authService.getUser();
-      if (user != null && user['rollNo'] != null) {
-        final result = await _authService.updateProfile(user['rollNo'], {
+      if (user != null && user['id'] != null) {
+        final result = await _authService.updateProfile(user['id'], {
           'name': _nameController.text,
           'email': _emailController.text,
           'phone': _phoneController.text,

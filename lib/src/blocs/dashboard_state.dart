@@ -21,6 +21,7 @@ class DashboardLoaded extends DashboardState {
   final String hostelBlock;
   final String roomNumber;
   final List<Map<String, dynamic>> birthdays;
+  final List<dynamic> recentTransactions;
 
   const DashboardLoaded({
     required this.balance,
@@ -32,6 +33,7 @@ class DashboardLoaded extends DashboardState {
     required this.hostelBlock,
     required this.roomNumber,
     this.birthdays = const [],
+    this.recentTransactions = const [],
   });
 
   @override
@@ -45,6 +47,7 @@ class DashboardLoaded extends DashboardState {
     hostelBlock,
     roomNumber,
     birthdays,
+    recentTransactions,
   ];
 }
 
