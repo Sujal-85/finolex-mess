@@ -79,17 +79,9 @@ class AuthService {
   Future<Map<String, dynamic>?> refreshUser() async {
     try {
       final user = await getUser();
-      if (user != null && user['rollNo'] != null) {
-        final response = await _apiService.get('/students/${user['rollNo']}');
+      if (user != null && user['id'] != null) {
+        final response = await _apiService.get('/students/${user['id']}');
         if (response.statusCode == 200) {
-          // The backend returns the full student object.
-          // We need to ensure we map it correctly to what the app expects.
-          // The login response structure was: { token, student: { id, name, ... } }
-          // The GET /:rollNo response is just the student object.
-          // We should probably normalize this, but for now let's just update the stored user.
-
-          // Note: The backend GET /:rollNo returns the raw mongoose document.
-          // We might need to map '_id' to 'id' if the app expects 'id'.
           final updatedUser = response.data;
           if (updatedUser['_id'] != null) {
             updatedUser['id'] = updatedUser['_id'];
@@ -186,11 +178,11 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> updateProfile(
-    String rollNo,
+    String id,
     Map<String, dynamic> data,
   ) async {
     try {
-      final response = await _apiService.put('/students/$rollNo', data: data);
+      final response = await _apiService.put('/students/$id', data: data);
       if (response.statusCode == 200) {
         // Update local storage
         final user = response.data['student'];
@@ -217,7 +209,7 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> changePassword(
-    String rollNo,
+    String id,
     String currentPassword,
     String newPassword,
   ) async {
@@ -225,7 +217,7 @@ class AuthService {
       final response = await _apiService.post(
         '/students/change-password',
         data: {
-          'rollNo': rollNo,
+          'id': id,
           'currentPassword': currentPassword,
           'newPassword': newPassword,
         },

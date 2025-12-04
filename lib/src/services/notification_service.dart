@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/notification_model.dart';
+import '../services/api_service.dart';
 
 class NotificationService extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
@@ -9,78 +10,22 @@ class NotificationService extends ChangeNotifier {
   NotificationType get selectedFilter => _selectedFilter;
 
   NotificationService() {
-    _loadSampleNotifications();
+    fetchNotifications();
   }
 
-  void _loadSampleNotifications() {
-    _notifications = [
-      NotificationModel(
-        id: '1',
-        title: 'Menu Update',
-        description: 'Today\'s lunch menu has been updated with new items.',
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-        type: NotificationType.mess,
-        isUnread: true,
-        isNew: true,
-      ),
-      NotificationModel(
-        id: '2',
-        title: 'Payment Successful',
-        description:
-            'Your monthly mess bill payment of ₹2500 has been processed.',
-        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-        type: NotificationType.payment,
-        isUnread: true,
-        isNew: false,
-      ),
-      NotificationModel(
-        id: '3',
-        title: 'New Announcement',
-        description:
-            'FAMT College Fest schedule released. Check details inside.',
-        timestamp: DateTime.now().subtract(const Duration(days: 1)),
-        type: NotificationType.news,
-        isUnread: false,
-        isNew: false,
-      ),
-      NotificationModel(
-        id: '4',
-        title: 'Urgent Notice',
-        description: 'Mess will remain closed tomorrow due to maintenance.',
-        timestamp: DateTime.now().subtract(const Duration(days: 2)),
-        type: NotificationType.urgent,
-        isUnread: true,
-        isNew: true,
-      ),
-      NotificationModel(
-        id: '5',
-        title: 'Weekly Special',
-        description: 'Try our new South Indian special thali this weekend.',
-        timestamp: DateTime.now().subtract(const Duration(days: 3)),
-        type: NotificationType.mess,
-        isUnread: false,
-        isNew: false,
-      ),
-      NotificationModel(
-        id: '6',
-        title: 'Refund Processed',
-        description: 'Your refund of ₹500 has been credited to your account.',
-        timestamp: DateTime.now().subtract(const Duration(days: 5)),
-        type: NotificationType.payment,
-        isUnread: false,
-        isNew: false,
-      ),
-      NotificationModel(
-        id: '7',
-        title: 'Holiday Notice',
-        description: 'Mess will be closed on 15th August for Independence Day.',
-        timestamp: DateTime.now().subtract(const Duration(days: 10)),
-        type: NotificationType.urgent,
-        isUnread: false,
-        isNew: false,
-      ),
-    ];
-    notifyListeners();
+  Future<void> fetchNotifications() async {
+    try {
+      final response = await ApiService().get('/notifications');
+      if (response.statusCode == 200) {
+        final List<dynamic> data = response.data;
+        _notifications = data
+            .map((json) => NotificationModel.fromJson(json))
+            .toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error fetching notifications: $e');
+    }
   }
 
   void selectFilter(NotificationType filter) {

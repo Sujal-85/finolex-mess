@@ -39,9 +39,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     try {
       final user = await _authService.getUser();
-      if (user != null && user['rollNo'] != null) {
+      if (user != null && user['id'] != null) {
         final result = await _authService.changePassword(
-          user['rollNo'],
+          user['id'],
           _currentPasswordController.text,
           _newPasswordController.text,
         );

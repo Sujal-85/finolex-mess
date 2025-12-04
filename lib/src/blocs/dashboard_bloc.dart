@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/payment_service.dart';
 import 'dashboard_event.dart';
 import 'dashboard_state.dart';
 
@@ -38,6 +39,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final birthdayResponse = await api.get('/students/birthdays/today');
       final birthdays = List<Map<String, dynamic>>.from(birthdayResponse.data);
 
+      // Fetch transactions
+      final paymentService = PaymentService();
+      List<dynamic> recentTransactions = [];
+      if (user?['id'] != null) {
+        try {
+          recentTransactions = await paymentService.fetchTransactionHistory(
+            user!['id'],
+          );
+        } catch (e) {
+          print('Error fetching transactions: $e');
+        }
+      }
+
       emit(
         DashboardLoaded(
           balance: balance,
@@ -49,6 +63,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           hostelBlock: hostelBlock,
           roomNumber: roomNumber,
           birthdays: birthdays,
+          recentTransactions: recentTransactions,
         ),
       );
     } catch (e) {
@@ -76,6 +91,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final birthdayResponse = await api.get('/students/birthdays/today');
       final birthdays = List<Map<String, dynamic>>.from(birthdayResponse.data);
 
+      // Fetch transactions
+      final paymentService = PaymentService();
+      List<dynamic> recentTransactions = [];
+      if (user?['id'] != null) {
+        try {
+          recentTransactions = await paymentService.fetchTransactionHistory(
+            user!['id'],
+          );
+        } catch (e) {
+          print('Error fetching transactions: $e');
+        }
+      }
+
       emit(
         DashboardLoaded(
           balance: balance,
@@ -87,6 +115,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           hostelBlock: hostelBlock,
           roomNumber: roomNumber,
           birthdays: birthdays,
+          recentTransactions: recentTransactions,
         ),
       );
     } catch (e) {

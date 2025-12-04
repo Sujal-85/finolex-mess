@@ -7,10 +7,13 @@ import 'src/theme/colors.dart';
 import 'src/services/notification_service.dart';
 import 'src/services/settings_service.dart';
 import 'src/services/receipt_service.dart';
+import 'src/services/local_notification_service.dart';
 
 import 'package:flutter/services.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -18,7 +21,45 @@ void main() {
       statusBarBrightness: Brightness.light, // For iOS (dark icons)
     ),
   );
+
+  // Initialize notifications in background to prevent startup hang
+  _initNotifications();
+
   runApp(const MyApp());
+}
+
+Future<void> _initNotifications() async {
+  try {
+    final notificationService = LocalNotificationService();
+    await notificationService.init();
+
+    // Schedule Daily Meal Reminders
+    await notificationService.scheduleDailyNotification(
+      id: 1,
+      title: 'Good Morning!',
+      body: 'Breakfast is ready. Start your day with a healthy meal!',
+      hour: 8,
+      minute: 0,
+    );
+
+    await notificationService.scheduleDailyNotification(
+      id: 2,
+      title: 'Lunch Time!',
+      body: 'Lunch is being served. Check out today\'s menu.',
+      hour: 12,
+      minute: 30,
+    );
+
+    await notificationService.scheduleDailyNotification(
+      id: 3,
+      title: 'Dinner Time!',
+      body: 'Dinner is ready. Don\'t miss it!',
+      hour: 19,
+      minute: 30,
+    );
+  } catch (e) {
+    debugPrint('Error initializing notifications: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -34,27 +75,31 @@ class MyApp extends StatelessWidget {
       ],
       child: MultiBlocProvider(
         providers: [BlocProvider(create: (context) => DashboardBloc())],
-        child: MaterialApp.router(
-          title: 'FAMT Mess App',
-          debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-              brightness: Brightness.light,
-            ),
-            scaffoldBackgroundColor: AppColors.backgroundLight,
-          ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
-              brightness: Brightness.dark,
-            ),
-            scaffoldBackgroundColor: AppColors.backgroundDark,
-          ),
-          themeMode: ThemeMode.system,
-          routerConfig: AppRouter.router,
+        child: Consumer<SettingsService>(
+          builder: (context, settingsService, child) {
+            return MaterialApp.router(
+              title: 'FAMT Mess App',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData(
+                useMaterial3: true,
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: AppColors.primary,
+                  brightness: Brightness.light,
+                ),
+                scaffoldBackgroundColor: AppColors.backgroundLight,
+              ),
+              darkTheme: ThemeData(
+                useMaterial3: true,
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: AppColors.primary,
+                  brightness: Brightness.dark,
+                ),
+                scaffoldBackgroundColor: AppColors.backgroundDark,
+              ),
+              themeMode: settingsService.themeMode,
+              routerConfig: AppRouter.router,
+            );
+          },
         ),
       ),
     );

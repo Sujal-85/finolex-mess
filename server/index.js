@@ -23,6 +23,15 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
     .then(() => {
         console.log('Connected to MongoDB');
 
+        // Drop legacy index if it exists to fix registration error
+        try {
+            mongoose.connection.collection('students').dropIndex('rollNumber_1')
+                .then(() => console.log('Dropped legacy index: rollNumber_1'))
+                .catch(err => console.log('Legacy index rollNumber_1 check: ' + (err.codeName || err.message)));
+        } catch (e) {
+            console.log('Error checking legacy index:', e);
+        }
+
         // Routes
         const paymentRoutes = require('./routes/payments');
         const menuRoutes = require('./routes/menuItems');
@@ -35,6 +44,11 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         const feedbackRoutes = require('./routes/feedback');
         const verifyRoutes = require('./routes/verify');
         const uploadRoutes = require('./routes/upload');
+        const notificationRoutes = require('./routes/notification');
+        const scheduler = require('./services/scheduler');
+
+        // Initialize Scheduler
+        scheduler.init();
 
         app.use('/api/payments', paymentRoutes);
         app.use('/api/menu', menuRoutes);
@@ -47,6 +61,7 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         app.use('/api/feedback', feedbackRoutes);
         app.use('/api/verify', verifyRoutes);
         app.use('/api/upload', uploadRoutes);
+        app.use('/api/notifications', notificationRoutes);
 
         // Serve uploaded files statically
         app.use('/uploads', express.static('uploads'));

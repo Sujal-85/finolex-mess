@@ -345,40 +345,56 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Widget _buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Lottie.asset(
-            'assets/lottie/No Data Animation.json',
-            controller: _lottieController,
-            height: 180,
-            onLoaded: (composition) {
-              _lottieController
-                ..duration = composition.duration * (1)
-                ..repeat();
-            },
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No Transactions Yet',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary(context),
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Your transaction history will appear here',
-            style: GoogleFonts.roboto(
-              fontSize: 14,
-              color: AppColors.textSecondaryLight,
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Lottie.asset(
+              'assets/lottie/No Data Animation.json',
+              controller: _lottieController,
+              height: 180,
+              onLoaded: (composition) {
+                _lottieController
+                  ..duration = composition.duration * (1)
+                  ..repeat();
+              },
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              'No Transactions Yet',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary(context),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your transaction history will appear here',
+              style: GoogleFonts.roboto(
+                fontSize: 14,
+                color: AppColors.textSecondaryLight,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

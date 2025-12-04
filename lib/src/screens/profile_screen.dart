@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/shimmer_effect.dart';
+import '../widgets/dialogs/plan_details_dialog.dart';
 import '../services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -197,6 +198,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                   _buildSettingsSection(),
 
                   const SizedBox(height: 24),
+
+                  Center(
+                    child: Text(
+                      'By Prasanna Caterers',
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 16,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textSecondaryLight,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -387,10 +401,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           const SizedBox(height: 16),
 
-          // Account Details Card
+          // Mess Plan Payment Card
           _buildInfoCard(
-            title: 'Account Details',
-            icon: Icons.account_balance_wallet_outlined,
+            title: 'Mess Plan Payment',
+            icon: Icons.payment_outlined,
+            onTap: _showPlanDetailsDialog,
             children: [
               _buildBalanceRow(),
               _buildInfoRow(
@@ -408,37 +423,57 @@ class _ProfileScreenState extends State<ProfileScreen>
     required String title,
     required IconData icon,
     required List<Widget> children,
+    VoidCallback? onTap,
   }) {
     return SlideTransition(
       position: _slideAnimation,
-      child: Container(
-        width: double.infinity,
-        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: AppColors.primary, size: 24),
-                  const SizedBox(width: 12),
-                  Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary(context),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, color: AppColors.primary, size: 24),
+                    const SizedBox(width: 12),
+                    Text(
+                      title,
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary(context),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...children,
-            ],
+                    if (onTap != null) ...[
+                      const Spacer(),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: AppColors.textSecondaryLight,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ...children,
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  void _showPlanDetailsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) =>
+          PlanDetailsDialog(messType: _userProfile?.messType ?? 'Standard'),
     );
   }
 
@@ -455,12 +490,17 @@ class _ProfileScreenState extends State<ProfileScreen>
               color: AppColors.textSecondaryLight,
             ),
           ),
-          Text(
-            value,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary(context),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary(context),
+              ),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -469,13 +509,17 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildBalanceRow() {
+    final double targetAmount = 3500;
+    final double currentAmount = _userProfile?.currentBalance ?? 0;
+    final double progress = (currentAmount / targetAmount).clamp(0.0, 1.0);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Current Balance',
+            'Amount Paid (Mess Plan)',
             style: GoogleFonts.poppins(
               fontSize: 14,
               color: AppColors.textSecondaryLight,
@@ -485,12 +529,26 @@ class _ProfileScreenState extends State<ProfileScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '₹${_userProfile?.currentBalance.toStringAsFixed(2) ?? '0.00'}',
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+              RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '₹${currentAmount.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' / ₹${targetAmount.toStringAsFixed(0)}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textSecondaryLight,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               GestureDetector(
@@ -506,7 +564,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     color: AppColors.accent,
                   ),
                   child: Text(
-                    'Recharge',
+                    'Pay Now',
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -516,6 +574,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: AppColors.primary.withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                progress >= 1.0 ? Colors.green : AppColors.primary,
+              ),
+              minHeight: 8,
+            ),
           ),
         ],
       ),
@@ -752,10 +822,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               children: [
                 const Icon(Icons.phone, size: 18, color: AppColors.primary),
                 const SizedBox(width: 8),
-                Text(
-                  phone,
-                  style: GoogleFonts.roboto(fontSize: 16),
-                ),
+                Text(phone, style: GoogleFonts.roboto(fontSize: 16)),
               ],
             ),
           ],
@@ -788,11 +855,19 @@ class _ProfileScreenState extends State<ProfileScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildWardenItem('Head Warden', 'Mr. Vidyasheel Bagde', '+919823123845'),
+            _buildWardenItem(
+              'Head Warden',
+              'Mr. Vidyasheel Bagde',
+              '+919823123845',
+            ),
             const Divider(),
             _buildWardenItem('Boys Warden', 'Mr. Sharma', '+918619664663'),
             const Divider(),
-            _buildWardenItem('Girls Warden', 'Ms. Sankareshwari', '+919423297439'),
+            _buildWardenItem(
+              'Girls Warden',
+              'Ms. Sankareshwari',
+              '+919423297439',
+            ),
           ],
         ),
         actions: [
@@ -861,9 +936,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           children: [
             const CircleAvatar(
               radius: 40,
-              backgroundImage: AssetImage(
-                'assets/images/profile.png',
-              ),
+              backgroundImage: AssetImage('assets/images/profile.png'),
             ),
             const SizedBox(height: 16),
             Text(
@@ -882,10 +955,28 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ),
             const SizedBox(height: 16),
-            _buildDeveloperLink(Icons.phone, '9359742537', () => _launchDialer('9359742537')),
-            _buildDeveloperLink(Icons.email, 'khedekarsujay720@gmail.com', () => _launchEmail('khedekarsujay720@gmail.com')),
-            _buildDeveloperLink(Icons.link, 'GitHub Profile', () => _launchUrl('https://github.com/Sujal-85')),
-            _buildDeveloperLink(Icons.work, 'LinkedIn Profile', () => _launchUrl('https://www.linkedin.com/in/sujal-khedekar-a82b05293/')),
+            _buildDeveloperLink(
+              Icons.phone,
+              '9359742537',
+              () => _launchDialer('9359742537'),
+            ),
+            _buildDeveloperLink(
+              Icons.email,
+              'khedekarsujay720@gmail.com',
+              () => _launchEmail('khedekarsujay720@gmail.com'),
+            ),
+            _buildDeveloperLink(
+              Icons.link,
+              'GitHub Profile',
+              () => _launchUrl('https://github.com/Sujal-85'),
+            ),
+            _buildDeveloperLink(
+              Icons.work,
+              'LinkedIn Profile',
+              () => _launchUrl(
+                'https://www.linkedin.com/in/sujal-khedekar-a82b05293/',
+              ),
+            ),
           ],
         ),
         actions: [
@@ -1038,37 +1129,37 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildInfoCardSkeleton() {
     return Container(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const ShimmerEffect.rectangular(
-              height: 20,
-              width: 150,
-              borderRadius: 10,
-            ),
-            const SizedBox(height: 16),
-            ...List.generate(4, (index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const ShimmerEffect.rectangular(
-                      height: 14,
-                      width: 100,
-                      borderRadius: 7,
-                    ),
-                    const ShimmerEffect.rectangular(
-                      height: 14,
-                      width: 150,
-                      borderRadius: 7,
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ShimmerEffect.rectangular(
+            height: 20,
+            width: 150,
+            borderRadius: 10,
+          ),
+          const SizedBox(height: 16),
+          ...List.generate(4, (index) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const ShimmerEffect.rectangular(
+                    height: 14,
+                    width: 100,
+                    borderRadius: 7,
+                  ),
+                  const ShimmerEffect.rectangular(
+                    height: 14,
+                    width: 150,
+                    borderRadius: 7,
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 }

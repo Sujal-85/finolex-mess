@@ -24,35 +24,37 @@ class AboutScreen extends StatelessWidget {
                   children: [
                     _buildSection(
                       context,
-                      'Privacy Policy',
-                      'We value your privacy. This app collects minimal personal data required for hostel mess management, including your name, roll number, and contact details. We do not share your data with third parties.',
+                      'Description',
+                      'The Finolex Canteen App is designed to streamline the dining experience for students. Manage your mess plans, check daily menus, and track your payments all in one place.',
                     ),
+                    const SizedBox(height: 24),
+                    _buildFeaturesSection(context),
                     const SizedBox(height: 24),
                     _buildSection(
                       context,
-                      'Terms of Service',
-                      'By using this app, you agree to follow the college rules regarding mess facilities. Misuse of the app or providing false information may lead to disciplinary action.',
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSection(
-                      context,
-                      'Data Usage',
-                      'Your data is used solely for:\n• Managing mess attendance\n• Processing payments\n• Sending important notifications\n• Improving mess services',
-                    ),
-                    const SizedBox(height: 24),
-                    _buildSection(
-                      context,
-                      'Contact Us',
-                      'For any privacy-related concerns or questions about these terms, please contact the college administration or the developer.',
+                      'Developer',
+                      'Developed with ❤️ for Finolex Academy of Management and Technology.',
                     ),
                     const SizedBox(height: 40),
                     Center(
-                      child: Text(
-                        'Version 1.0.0',
-                        style: GoogleFonts.roboto(
-                          color: AppColors.textSecondaryLight,
-                          fontSize: 14,
-                        ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Finolex Canteen App',
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary(context),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Version 1.0.0',
+                            style: GoogleFonts.roboto(
+                              color: AppColors.textSecondaryLight,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -93,7 +95,7 @@ class AboutScreen extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'Privacy & Terms',
+                'About App',
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -111,16 +113,39 @@ class AboutScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.security, color: Colors.white, size: 40),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.restaurant_menu_rounded,
+                    color: AppColors.primary,
+                    size: 24,
+                  ),
+                ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(
-                    'Your data security and privacy are our top priority.',
-                    style: GoogleFonts.roboto(
-                      color: Colors.white,
-                      fontSize: 14,
-                      height: 1.5,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Finolex Canteen',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        'Smart Dining Solution',
+                        style: GoogleFonts.roboto(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -154,6 +179,58 @@ class AboutScreen extends StatelessWidget {
               fontSize: 15,
               height: 1.6,
               color: AppColors.textSecondaryLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeaturesSection(BuildContext context) {
+    final features = [
+      'Digital Mess Card',
+      'Daily Menu Updates',
+      'Online Payments',
+      'Attendance Tracking',
+      'Feedback System',
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Key Features',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...features.map(
+            (feature) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    feature,
+                    style: GoogleFonts.roboto(
+                      fontSize: 15,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

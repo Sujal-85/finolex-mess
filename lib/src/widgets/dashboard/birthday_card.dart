@@ -1,112 +1,164 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/colors.dart';
-import '../neumorphic_card.dart';
+import 'package:lottie/lottie.dart';
 
 class BirthdayCard extends StatelessWidget {
-  final String studentName;
+  final String? studentName;
   final String? profileImage;
 
-  const BirthdayCard({super.key, required this.studentName, this.profileImage});
+  const BirthdayCard({super.key, this.studentName, this.profileImage});
 
   @override
   Widget build(BuildContext context) {
-    return NeumorphicCard(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [Colors.purple.shade50, Colors.pink.shade50],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
-        ),
-        child: Row(
-          children: [
-            // Profile Image with festive border
-            Container(
-              padding: const EdgeInsets.all(3),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Decorative Background Gradient (Subtle)
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 150,
+              height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Colors.purple, Colors.pink, Colors.orange],
+                gradient: RadialGradient(
+                  colors: [Colors.orange.withOpacity(0.1), Colors.transparent],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.pink.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: CircleAvatar(
-                radius: 30,
-                backgroundColor: Colors.white,
-                backgroundImage:
-                    profileImage != null && profileImage!.isNotEmpty
-                    ? NetworkImage(profileImage!)
-                    : null,
-                child: profileImage == null || profileImage!.isEmpty
-                    ? const Icon(Icons.cake, color: Colors.pink, size: 30)
-                    : null,
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.celebration,
-                        color: Colors.orange,
-                        size: 20,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          '🎉 Special Day',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 16),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Color(0xFFFFD700), Color(0xFFFF6B6B)],
+                          ).createShader(bounds),
+                          child: Text(
+                            'Happy Birthday!',
+                            style: GoogleFonts.playfairDisplay(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white, // Required for ShaderMask
+                              height: 1.1,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (studentName != null) ...[
+                        const SizedBox(height: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            studentName!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF2D3436),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
                       Text(
-                        "Today's Birthday!",
+                        'Wishing you a fantastic year ahead!',
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.purple,
+                          fontSize: 13,
+                          color: const Color(0xFF636E72),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Happy Birthday,',
-                    style: GoogleFonts.roboto(
-                      fontSize: 14,
-                      color: AppColors.textSecondaryLight,
-                    ),
+                ),
+                // Lottie Animation
+                SizedBox(
+                  width: 100,
+                  height: 100,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Fallback Icon in case Lottie fails or loads late
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.cake_rounded,
+                          color: Colors.orange,
+                          size: 40,
+                        ),
+                      ),
+                      // Lottie Animation
+                      Lottie.asset(
+                        'assets/lottie/party propper.json',
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const SizedBox(); // Hide if fails
+                        },
+                      ),
+                    ],
                   ),
-                  Text(
-                    studentName,
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary(context),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            // Decorative Icon
-            Transform.rotate(
-              angle: 0.2,
-              child: const Icon(
-                Icons.card_giftcard,
-                size: 40,
-                color: Colors.pinkAccent,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
