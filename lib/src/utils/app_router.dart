@@ -7,6 +7,7 @@ import '../screens/home/dashboard_screen.dart';
 import '../screens/menu/menu_screen.dart';
 import '../screens/history_screen.dart';
 import '../screens/news/news_feed_screen.dart';
+import '../screens/news/news_detail_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/student_registration_screen.dart';
 import '../screens/payment_screen.dart';
@@ -141,6 +142,18 @@ class AppRouter {
                   key: state.pageKey,
                   child: const NewsFeedScreen(),
                 ),
+                routes: [
+                  GoRoute(
+                    path: ':id',
+                    pageBuilder: (context, state) {
+                      final newsItem = state.extra as Map<String, dynamic>;
+                      return AppAnimations.transitionPage(
+                        key: state.pageKey,
+                        child: NewsDetailScreen(newsItem: newsItem),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),

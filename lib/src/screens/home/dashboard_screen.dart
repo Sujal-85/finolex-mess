@@ -36,7 +36,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       body: SafeArea(
-
         child: BlocListener<DashboardBloc, DashboardState>(
           listener: (context, state) {
             if (state is DashboardLoaded) {
@@ -46,21 +45,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               notificationService.scheduleDailyNotification(
                 id: 10,
                 title: 'Good Morning! ☀️',
-                body: 'Breakfast is ready! Start your day with a healthy meal.',
+                body: 'Breakfast is ready! Today: ${state.breakfastItem}',
                 hour: 8,
                 minute: 0,
               );
               notificationService.scheduleDailyNotification(
                 id: 11,
                 title: 'Lunch Time! 🍛',
-                body: 'Don\'t forget to have your lunch. Check the menu!',
+                body: 'Lunch is served! Today: ${state.lunchItem}',
                 hour: 13,
                 minute: 0,
               );
               notificationService.scheduleDailyNotification(
                 id: 12,
                 title: 'Dinner is Served! 🌙',
-                body: 'Dinner is ready. Come and enjoy your meal.',
+                body: 'Dinner is ready! Today: ${state.dinnerItem}',
                 hour: 20,
                 minute: 0,
               );
@@ -69,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               notificationService.scheduleDailyNotification(
                 id: 20,
                 title: 'Menu Updated 📅',
-                body: 'Today\'s menu has been updated. Check it out!',
+                body: 'Check out today\'s menu including ${state.lunchItem}!',
                 hour: 7,
                 minute: 0,
               );
@@ -79,7 +78,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 notificationService.scheduleDailyNotification(
                   id: 100,
                   title: 'Payment Due ⚠️',
-                  body: 'Your mess fees are due. Please pay to avoid penalties.',
+                  body:
+                      'Your mess fees are due. Please pay to avoid penalties.',
                   hour: 10,
                   minute: 0,
                 );
@@ -118,7 +118,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           roomNumber: state.roomNumber,
                           notificationCount: state.unreadNotifications,
                           profileImage: state.profileImage,
-                          onNotificationTap: () => context.push('/notifications'),
+                          onNotificationTap: () =>
+                              context.push('/notifications'),
                           onProfileTap: () => context.push('/profile'),
                         ),
 
@@ -158,6 +159,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               // Menu Card
                               MenuCard(
                                 onViewFullMenu: () => context.push('/menu'),
+                                breakfastItem: state.breakfastItem,
+                                lunchItem: state.lunchItem,
+                                dinnerItem: state.dinnerItem,
                               ),
 
                               const SizedBox(height: 24),
@@ -178,7 +182,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 builder: (context, constraints) {
                                   return GridView.count(
                                     shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
                                     crossAxisCount:
                                         3, // Changed to 3 for better visibility
                                     crossAxisSpacing: 12,
@@ -213,8 +218,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         'Rules',
                                         Icons.gavel_outlined,
                                         Colors.purple,
-                                        () =>
-                                            context.push('/about'), // Placeholder
+                                        () => context.push(
+                                          '/about',
+                                        ), // Placeholder
                                       ),
                                       _buildCompactAction(
                                         'Settings',

@@ -32,6 +32,21 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
             console.log('Error checking legacy index:', e);
         }
 
+        // Migration: Add 'days' to all menu items if missing
+        try {
+            const MenuItem = require('./models/MenuItem');
+            MenuItem.updateMany(
+                { days: { $exists: false } },
+                { $set: { days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] } }
+            ).then(result => {
+                if (result.modifiedCount > 0) {
+                    console.log(`Migrated ${result.modifiedCount} menu items with default days.`);
+                }
+            }).catch(err => console.error('Menu migration error:', err));
+        } catch (error) {
+            console.error('Menu migration setup error:', error);
+        }
+
         // Routes
         const paymentRoutes = require('./routes/payments');
         const menuRoutes = require('./routes/menuItems');

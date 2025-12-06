@@ -23,9 +23,16 @@ class DashboardLoaded extends DashboardState {
   final List<Map<String, dynamic>> birthdays;
   final List<dynamic> recentTransactions;
 
+  final String breakfastItem;
+  final String lunchItem;
+  final String dinnerItem;
+
   const DashboardLoaded({
     required this.balance,
     required this.nextMeal,
+    this.breakfastItem = 'Breakfast',
+    this.lunchItem = 'Lunch',
+    this.dinnerItem = 'Dinner',
     required this.unreadNotifications,
     required this.latestAnnouncement,
     required this.studentName,
@@ -36,10 +43,45 @@ class DashboardLoaded extends DashboardState {
     this.recentTransactions = const [],
   });
 
+  DashboardLoaded copyWith({
+    double? balance,
+    String? nextMeal,
+    String? breakfastItem,
+    String? lunchItem,
+    String? dinnerItem,
+    int? unreadNotifications,
+    String? latestAnnouncement,
+    String? studentName,
+    String? profileImage,
+    String? hostelBlock,
+    String? roomNumber,
+    List<Map<String, dynamic>>? birthdays,
+    List<dynamic>? recentTransactions,
+  }) {
+    return DashboardLoaded(
+      balance: balance ?? this.balance,
+      nextMeal: nextMeal ?? this.nextMeal,
+      breakfastItem: breakfastItem ?? this.breakfastItem,
+      lunchItem: lunchItem ?? this.lunchItem,
+      dinnerItem: dinnerItem ?? this.dinnerItem,
+      unreadNotifications: unreadNotifications ?? this.unreadNotifications,
+      latestAnnouncement: latestAnnouncement ?? this.latestAnnouncement,
+      studentName: studentName ?? this.studentName,
+      profileImage: profileImage ?? this.profileImage,
+      hostelBlock: hostelBlock ?? this.hostelBlock,
+      roomNumber: roomNumber ?? this.roomNumber,
+      birthdays: birthdays ?? this.birthdays,
+      recentTransactions: recentTransactions ?? this.recentTransactions,
+    );
+  }
+
   @override
   List<Object?> get props => [
     balance,
     nextMeal,
+    breakfastItem,
+    lunchItem,
+    dinnerItem,
     unreadNotifications,
     latestAnnouncement,
     studentName,

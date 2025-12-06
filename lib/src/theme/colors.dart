@@ -44,4 +44,9 @@ class AppColors {
       Theme.of(context).brightness == Brightness.light
       ? textPrimaryLight
       : textPrimaryDark;
+
+  static Color textSecondary(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+      ? textSecondaryLight
+      : textSecondaryDark;
 }

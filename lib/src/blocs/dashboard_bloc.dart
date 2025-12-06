@@ -1,16 +1,34 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
+import '../services/local_notification_service.dart';
 import 'dashboard_event.dart';
 import 'dashboard_state.dart';
 
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final AuthService _authService = AuthService();
 
+  Timer? _timer;
+  final LocalNotificationService _notificationService =
+      LocalNotificationService();
+
   DashboardBloc() : super(DashboardInitial()) {
     on<DashboardLoadRequested>(_onLoadRequested);
     on<DashboardRefreshRequested>(_onRefreshRequested);
+    on<DashboardNotificationCheck>(_onNotificationCheck);
+
+    // Start polling every 2 minutes
+    _timer = Timer.periodic(const Duration(minutes: 2), (_) {
+      add(DashboardNotificationCheck());
+    });
+  }
+
+  @override
+  Future<void> close() {
+    _timer?.cancel();
+    return super.close();
   }
 
   Future<void> _onLoadRequested(
@@ -52,11 +70,73 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         }
       }
 
+      // Fetch menu for today
+      final now = DateTime.now();
+      final day = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ][now.weekday - 1];
+      final menuResponse = await api.get(
+        '/menu',
+        queryParameters: {'day': day},
+      );
+      final menuItems = List<Map<String, dynamic>>.from(menuResponse.data);
+
+      // Helper to find item by mealType
+      String findItem(String mealType) {
+        final item = menuItems.firstWhere(
+          (item) =>
+              item['mealType'].toString().toLowerCase() ==
+              mealType.toLowerCase(),
+          orElse: () => {
+            'name': '${mealType[0].toUpperCase()}${mealType.substring(1)} Menu',
+          },
+        );
+        return item['name'];
+      }
+
+      final breakfastItem = findItem('breakfast');
+      final lunchItem = findItem('lunch');
+      final dinnerItem = findItem('dinner');
+
+      // Determine next meal based on time
+      final hour = now.hour;
+      String nextMealName = breakfastItem;
+      if (hour >= 9 && hour < 14) {
+        nextMealName = lunchItem;
+      } else if (hour >= 14 && hour < 21) {
+        nextMealName = dinnerItem;
+      } else if (hour >= 21) {
+        nextMealName = dinnerItem;
+      }
+
+      // Fetch notifications count
+      int unreadCount = 0;
+      if (user?['id'] != null) {
+        try {
+          final notifResponse = await api.get(
+            '/notifications?userId=${user!['id']}',
+          );
+          final notifications = notifResponse.data as List;
+          unreadCount = notifications.where((n) => !n['isRead']).length;
+        } catch (e) {
+          print('Error fetching notifications: $e');
+        }
+      }
+
       emit(
         DashboardLoaded(
           balance: balance,
-          nextMeal: 'Lunch: Veg Thali, Rice, Dal',
-          unreadNotifications: 3,
+          nextMeal: nextMealName,
+          breakfastItem: breakfastItem,
+          lunchItem: lunchItem,
+          dinnerItem: dinnerItem,
+          unreadNotifications: unreadCount,
           latestAnnouncement: latestAnnouncement,
           studentName: studentName,
           profileImage: profileImage,
@@ -77,49 +157,47 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   ) async {
     try {
       await Future.delayed(const Duration(seconds: 1));
+      // Reuse load logic for refresh
+      add(DashboardLoadRequested());
+    } catch (e) {
+      emit(DashboardError(message: e.toString()));
+    }
+  }
 
-      final user = await _authService.refreshUser();
-      final studentName = user?['name'] ?? 'Student';
-      final profileImage = user?['profileImage'];
-      final balance = (user?['balance'] ?? 0).toDouble();
+  Future<void> _onNotificationCheck(
+    DashboardNotificationCheck event,
+    Emitter<DashboardState> emit,
+  ) async {
+    if (state is! DashboardLoaded) return;
+    final currentState = state as DashboardLoaded;
 
-      final hostelDetails = user?['hostelDetails'] ?? {};
-      final hostelBlock = hostelDetails['hostelName'] ?? 'Not Assigned';
-      final roomNumber = hostelDetails['roomNo'] ?? 'N/A';
+    try {
+      final user = await _authService.getUser();
+      if (user?['id'] == null) return;
 
       final api = ApiService();
-      final birthdayResponse = await api.get('/students/birthdays/today');
-      final birthdays = List<Map<String, dynamic>>.from(birthdayResponse.data);
+      final response = await api.get('/notifications?userId=${user!['id']}');
+      final notifications = List<Map<String, dynamic>>.from(response.data);
+      final unreadCount = notifications.where((n) => !n['isRead']).length;
 
-      // Fetch transactions
-      final paymentService = PaymentService();
-      List<dynamic> recentTransactions = [];
-      if (user?['id'] != null) {
-        try {
-          recentTransactions = await paymentService.fetchTransactionHistory(
-            user!['id'],
+      // Check for new notifications to trigger local alert
+      if (unreadCount > currentState.unreadNotifications) {
+        final newNotif = notifications.firstWhere(
+          (n) => !n['isRead'],
+          orElse: () => {},
+        );
+        if (newNotif.isNotEmpty) {
+          _notificationService.showNotification(
+            id: DateTime.now().millisecond,
+            title: newNotif['title'] ?? 'New Notification',
+            body: newNotif['description'] ?? 'You have a new update.',
           );
-        } catch (e) {
-          print('Error fetching transactions: $e');
         }
       }
 
-      emit(
-        DashboardLoaded(
-          balance: balance,
-          nextMeal: 'Lunch: Veg Thali, Rice, Dal',
-          unreadNotifications: 3,
-          latestAnnouncement: 'Mess closed on Sunday evening',
-          studentName: studentName,
-          profileImage: profileImage,
-          hostelBlock: hostelBlock,
-          roomNumber: roomNumber,
-          birthdays: birthdays,
-          recentTransactions: recentTransactions,
-        ),
-      );
+      emit(currentState.copyWith(unreadNotifications: unreadCount));
     } catch (e) {
-      emit(DashboardError(message: e.toString()));
+      print('Error polling notifications: $e');
     }
   }
 }

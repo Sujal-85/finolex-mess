@@ -9,6 +9,11 @@ const complaintSchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     adminResponse: { type: String },
     images: [{ type: String }], // Array of image URLs
+    internalNotes: [{ type: String }], // For admin use
+    priority: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Medium' },
+    studentName: { type: String },
+    subject: { type: String },
+    resolvedAt: { type: Date }
 });
 
 module.exports = mongoose.model('Complaint', complaintSchema);

@@ -22,7 +22,8 @@ class NewsBloc extends Bloc<NewsEvent, NewsState> {
         return {
           'id': item['_id'] ?? 'unknown',
           'title': item['title'] ?? 'No Title',
-          'content': item['description'] ?? 'No Description',
+          'description': item['description'] ?? 'No Description',
+          'content': item['content'] ?? item['description'] ?? 'No Description',
           'date': item['date'] ?? DateTime.now().toIso8601String(),
           'image': item['image'],
           'isImportant': item['type'] == 'urgent',

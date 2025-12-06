@@ -80,16 +80,22 @@ class ProfileStyleHeader extends StatelessWidget {
                         ? CrossAxisAlignment.start
                         : CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.poppins(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: (showBackButton && !centerTitle)
+                            ? Alignment.centerLeft
+                            : Alignment.center,
+                        child: Text(
+                          title,
+                          style: GoogleFonts.poppins(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          textAlign: (showBackButton && !centerTitle)
+                              ? TextAlign.left
+                              : TextAlign.center,
                         ),
-                        textAlign: (showBackButton && !centerTitle)
-                            ? TextAlign.left
-                            : TextAlign.center,
                       ),
                       if (subtitle != null) ...[
                         const SizedBox(height: 4),
