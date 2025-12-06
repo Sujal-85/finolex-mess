@@ -8,6 +8,8 @@ import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/cloudinary_service.dart';
+import '../services/local_notification_service.dart';
+import '../theme/colors.dart';
 
 class StudentRegistrationScreen extends StatefulWidget {
   const StudentRegistrationScreen({super.key});
@@ -110,39 +112,50 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Row(
-          children: const [
-            Icon(Icons.check_circle, color: Colors.green, size: 32),
-            SizedBox(width: 12),
+          children: [
+            const Icon(Icons.check_circle, color: AppColors.success, size: 32),
+            const SizedBox(width: 12),
             Text(
               'Registered Successfully!',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
             ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Your Student ID:', style: GoogleFonts.roboto(fontSize: 16)),
+            Text(
+              'Your Student ID:',
+              style: GoogleFonts.roboto(
+                fontSize: 16,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
             const SizedBox(height: 12),
             Text(
               studentId,
               style: GoogleFonts.robotoMono(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF1E40AF),
+                color: AppColors.primary,
               ),
             ),
             const SizedBox(height: 16),
-            const Text('Use this ID or your email to log in.'),
+            Text(
+              'Use this ID or your email to log in.',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
           ],
         ),
         actions: [
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E40AF),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () => context.pop(),
             child: const Text('OK', style: TextStyle(color: Colors.white)),
           ),
@@ -151,15 +164,47 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     );
   }
 
+  String? _generatedMobileOtp;
+
   Future<void> _verifyContact(String type) async {
     final controller = type == 'email' ? _emailController : _phoneController;
     final value = controller.text.trim();
     if (value.isEmpty) return;
 
+    if (type == 'mobile') {
+      // Local OTP Generation for Mobile
+      final otp = (100000 + DateTime.now().millisecondsSinceEpoch % 900000)
+          .toString();
+      setState(() => _generatedMobileOtp = otp);
+
+      // Show Local Notification (Mobile) or SnackBar (Web)
+      if (kIsWeb) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Web Dev Mode: Your OTP is $otp'),
+            backgroundColor: AppColors.info,
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: 'COPY',
+              textColor: Colors.white,
+              onPressed: () => _otpController.text = otp,
+            ),
+          ),
+        );
+      } else {
+        await LocalNotificationService().showNotification(
+          id: 999,
+          title: 'Mobile Verification OTP',
+          body: 'Your OTP is: $otp',
+        );
+      }
+
+      _showOtpDialog(type, value);
+      return;
+    }
+
     setState(() => _isSubmitting = true);
-    final success = type == 'email'
-        ? await _authService.sendEmailOtp(value)
-        : await _authService.sendMobileOtp(value);
+    final success = await _authService.sendEmailOtp(value);
     setState(() => _isSubmitting = false);
 
     if (success['success']) {
@@ -171,20 +216,35 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Verify ${type == 'email' ? 'Email' : 'Phone'}'),
+        title: Text(
+          'Verify ${type == 'email' ? 'Email' : 'Phone'}',
+          style: TextStyle(color: AppColors.textPrimary(context)),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('OTP sent to $contact'),
+            Text(
+              'OTP sent to $contact',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: _otpController,
               keyboardType: TextInputType.number,
+              style: TextStyle(color: AppColors.textPrimary(context)),
               decoration: InputDecoration(
                 hintText: 'Enter 6-digit OTP',
+                hintStyle: TextStyle(color: AppColors.textSecondary(context)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: AppColors.textSecondary(context).withOpacity(0.3),
+                  ),
                 ),
               ),
             ),
@@ -193,41 +253,62 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: () async {
               final otp = _otpController.text.trim();
               if (otp.length != 6) return;
 
               Navigator.pop(context);
+
+              if (type == 'mobile') {
+                // Local Verification for Mobile
+                if (otp == _generatedMobileOtp) {
+                  setState(() => _isPhoneVerified = true);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Phone verified!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Invalid OTP'),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+                return;
+              }
+
               setState(() => _isSubmitting = true);
-
-              final verified = type == 'email'
-                  ? await _authService.verifyEmailOtp(contact, otp)
-                  : await _authService.verifyMobileOtp(contact, otp);
-
+              final verified = await _authService.verifyEmailOtp(contact, otp);
               setState(() => _isSubmitting = false);
 
               if (verified['success']) {
-                setState(() {
-                  if (type == 'email') {
-                    _isEmailVerified = true;
-                  } else {
-                    _isPhoneVerified = true;
-                  }
-                });
+                setState(() => _isEmailVerified = true);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Email verified!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      '${type == 'email' ? 'Email' : 'Phone'} verified!',
-                    ),
-                    backgroundColor: Colors.green,
+                    content: Text(verified['message']),
+                    backgroundColor: AppColors.error,
                   ),
                 );
               }
             },
-            child: const Text('Verify'),
+            child: const Text('Verify', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -237,18 +318,18 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface(context),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
           onPressed: () => context.pop(),
         ),
         title: Text(
           'Student Registration',
           style: GoogleFonts.inter(
-            color: Colors.black87,
+            color: AppColors.textPrimary(context),
             fontWeight: FontWeight.w600,
             fontSize: 20,
           ),
@@ -262,9 +343,9 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
               // Progress Indicator
               LinearProgressIndicator(
                 value: (_currentStep + 1) / 3,
-                backgroundColor: Colors.grey[100],
+                backgroundColor: AppColors.surface(context),
                 valueColor: const AlwaysStoppedAnimation<Color>(
-                  Color(0xFF1E40AF),
+                  AppColors.primary,
                 ),
                 minHeight: 4,
               ),
@@ -283,7 +364,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: AppColors.textPrimary(context),
                           ),
                         ),
                       ),
@@ -293,7 +374,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                       'Step ${_currentStep + 1} of 3',
                       style: GoogleFonts.inter(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: AppColors.textSecondary(context),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -316,8 +397,12 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: Colors.grey[200]!)),
+                  color: AppColors.surface(context),
+                  border: Border(
+                    top: BorderSide(
+                      color: AppColors.textSecondary(context).withOpacity(0.1),
+                    ),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -326,7 +411,11 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            side: BorderSide(color: Colors.grey[300]!),
+                            side: BorderSide(
+                              color: AppColors.textSecondary(
+                                context,
+                              ).withOpacity(0.3),
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -335,7 +424,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                           child: Text(
                             'Back',
                             style: GoogleFonts.inter(
-                              color: Colors.black87,
+                              color: AppColors.textPrimary(context),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -345,7 +434,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                     Expanded(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E40AF),
+                          backgroundColor: AppColors.primary,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -436,6 +525,19 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
             ),
             firstDate: DateTime(1990),
             lastDate: DateTime.now(),
+            builder: (context, child) {
+              return Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: ColorScheme.light(
+                    primary: AppColors.primary,
+                    onPrimary: Colors.white,
+                    surface: AppColors.surface(context),
+                    onSurface: AppColors.textPrimary(context),
+                  ), dialogTheme: DialogThemeData(backgroundColor: AppColors.surface(context)),
+                ),
+                child: child!,
+              );
+            },
           );
           if (picked != null) {
             setState(() {
@@ -446,13 +548,19 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
+            border: Border.all(
+              color: AppColors.textSecondary(context).withOpacity(0.3),
+            ),
           ),
           child: Row(
             children: [
-              Icon(Icons.calendar_today, color: Colors.grey[600], size: 22),
+              Icon(
+                Icons.calendar_today,
+                color: AppColors.textSecondary(context),
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Text(
                 _selectedDate == null
@@ -460,8 +568,8 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                     : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
                 style: GoogleFonts.inter(
                   color: _selectedDate == null
-                      ? Colors.grey[600]
-                      : Colors.black87,
+                      ? AppColors.textSecondary(context)
+                      : AppColors.textPrimary(context),
                   fontSize: 16,
                 ),
               ),
@@ -505,12 +613,12 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   Widget _buildHostelStep() => Column(
     children: [
       SwitchListTile(
-        title: const Text(
+        title: Text(
           'I stay in college hostel',
-          style: TextStyle(fontSize: 17),
+          style: TextStyle(fontSize: 17, color: AppColors.textPrimary(context)),
         ),
         value: _isHostelite,
-        activeThumbColor: const Color(0xFF1E40AF),
+        activeThumbColor: AppColors.primary,
         onChanged: (v) => setState(() => _isHostelite = v),
       ),
       if (_isHostelite) ...[
@@ -565,33 +673,42 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      style: TextStyle(color: AppColors.textPrimary(context)),
       validator: validator ?? (v) => v!.trim().isEmpty ? 'Required' : null,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.inter(color: Colors.grey[600]),
-        prefixIcon: Icon(icon, color: Colors.grey[600], size: 22),
+        labelStyle: GoogleFonts.inter(color: AppColors.textSecondary(context)),
+        prefixIcon: Icon(
+          icon,
+          color: AppColors.textSecondary(context),
+          size: 22,
+        ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: AppColors.surface(context),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(
+            color: AppColors.textSecondary(context).withOpacity(0.3),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey[300]!),
+          borderSide: BorderSide(
+            color: AppColors.textSecondary(context).withOpacity(0.3),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF1E40AF), width: 1.5),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.red[400]!),
+          borderSide: const BorderSide(color: AppColors.error),
         ),
       ),
     );
@@ -599,7 +716,10 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
 
   Widget _togglePasswordVisibility(VoidCallback onTap) {
     return IconButton(
-      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+      icon: Icon(
+        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+        color: AppColors.textSecondary(context),
+      ),
       onPressed: onTap,
     );
   }
@@ -608,11 +728,11 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     return SizedBox(
       width: 80,
       child: verified
-          ? const Icon(Icons.check_circle, color: Colors.green, size: 32)
+          ? const Icon(Icons.check_circle, color: AppColors.success, size: 32)
           : OutlinedButton(
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                side: const BorderSide(color: Color(0xFF1E40AF)),
+                side: const BorderSide(color: AppColors.primary),
               ),
               onPressed: () => _verifyContact(type),
               child: const Text('Verify', style: TextStyle(fontSize: 13)),
@@ -629,7 +749,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
             height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF1E40AF), width: 4),
+              border: Border.all(color: AppColors.primary, width: 4),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black26,
@@ -641,11 +761,11 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
             child: ClipOval(
               child: _profileImage == null
                   ? Container(
-                      color: Colors.grey[200],
-                      child: const Icon(
+                      color: AppColors.surface(context),
+                      child: Icon(
                         Icons.person,
                         size: 60,
-                        color: Colors.grey,
+                        color: AppColors.textSecondary(context),
                       ),
                     )
                   : (kIsWeb
@@ -671,7 +791,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF1E40AF),
+                  color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(

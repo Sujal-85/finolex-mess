@@ -205,9 +205,13 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
       final response = await api.post(
         '/complaints',
         data: {
-          'studentId': _currentUser?['rollNo'] ?? 'Unknown',
+          'studentId': _currentUser?['id'] ?? 'Unknown',
+          'studentName': _currentUser?['name'] ?? 'Unknown',
           'category': _getBackendCategory(_selectedCategory),
           'title': _selectedCategory,
+          'subject': 'General Inquiry', // Default subject
+          'priority': 'Medium',
+          'internalNotes': [],
           'description': _messages
               .where(
                 (m) =>
@@ -474,15 +478,15 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
         ),
         const SizedBox(height: 12),
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 8,
+          runSpacing: 8,
           children: _categories.map((category) {
             return GestureDetector(
               onTap: () => _selectCategory(category),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+                  horizontal: 16,
+                  vertical: 10,
                 ),
                 decoration: NeumorphicStyle.buttonDecoration(
                   context,
@@ -492,7 +496,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
                 child: Text(
                   category,
                   style: GoogleFonts.poppins(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: Colors.white,
                   ),

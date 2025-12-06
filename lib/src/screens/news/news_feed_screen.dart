@@ -222,7 +222,7 @@ class _NewsCardProState extends State<NewsCardPro>
       child: GestureDetector(
         onTap: () {
           // Navigate to detail with Hero
-          context.push('/news/${widget.item['id']}');
+          context.push('/news/${widget.item['id']}', extra: widget.item);
         },
         child: Container(
           decoration: NeumorphicStyle.cardDecoration(
@@ -366,20 +366,19 @@ class _NewsCardProState extends State<NewsCardPro>
 
                           const SizedBox(height: 10),
 
-                          // Content Preview
-                          Text(
-                            widget.item['content'],
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.roboto(
-                              fontSize: 14.5,
-                              height: 1.6,
-                              color: AppColors.textSecondaryLight.withOpacity(
-                                0.9,
-                              ),
-                            ),
-                          ),
-
+                          // Content Preview Removed as per request
+                          // Text(
+                          //   widget.item['description'] ?? '',
+                          //   maxLines: 3,
+                          //   overflow: TextOverflow.ellipsis,
+                          //   style: GoogleFonts.roboto(
+                          //     fontSize: 14.5,
+                          //     height: 1.6,
+                          //     color: AppColors.textSecondaryLight.withOpacity(
+                          //       0.9,
+                          //     ),
+                          //   ),
+                          // ),
                           const SizedBox(height: 12),
 
                           // Read more hint

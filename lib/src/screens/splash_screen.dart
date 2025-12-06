@@ -55,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         );
 
-    // Subtle pulsing glow around logo
+    // Subtle pulsing glow around logo - adjusted for white background
     _glowAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
@@ -92,174 +92,159 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A1D56), // Deep professional blue
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0A1D56), Color(0xFF1E3A8A), Color(0xFF1E40AF)],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Animated Background Glow (subtle)
-            Center(
-              child: AnimatedBuilder(
-                animation: _glowAnimation,
-                builder: (context, child) {
-                  return Container(
-                    width: 320,
-                    height: 320,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          Colors.white.withValues(
-                            alpha: 0.12 * _glowAnimation.value,
-                          ),
-                          Colors.transparent,
-                        ],
-                      ),
+      backgroundColor: Colors.white, // Clean professional white
+      body: Stack(
+        children: [
+          // Animated Background Glow (subtle blue tint)
+          Center(
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  width: 320,
+                  height: 320,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(
+                          0xFF0A1D56,
+                        ).withValues(alpha: 0.05 * _glowAnimation.value),
+                        Colors.transparent,
+                      ],
                     ),
-                  );
-                },
-              ),
-            ),
-
-            // Main Content
-            Center(
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  return Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo with scale + glow
-                      ScaleTransition(
-                        scale: _scaleAnimation,
-                        child: Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.white.withValues(alpha: 0.3),
-                                blurRadius: 40 + (20 * _glowAnimation.value),
-                                spreadRadius: 10 * _glowAnimation.value,
-                              ),
-                              BoxShadow(
-                                color: Colors.blue.withValues(alpha: 0.4),
-                                blurRadius: 60,
-                                spreadRadius: 5,
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: Image.asset(
-                              'assets/images/logo-removebg.png',
-                              width: 160,
-                              height: 160,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 60),
-
-                      // App Name
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: SlideTransition(
-                          position: _slideAnimation,
-                          child: Text(
-                            'FAMT Mess App',
-                            style: GoogleFonts.poppins(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
-                              height: 1.2,
-                              shadows: const [
-                                Shadow(
-                                  color: Colors.black26,
-                                  offset: Offset(0, 4),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Tagline
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: SlideTransition(
-                          position: _slideAnimation,
-                          child: Text(
-                            'Meals — Managed Smartly',
-                            style: GoogleFonts.roboto(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white70,
-                              letterSpacing: 2.5,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Powered by
-                      FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Text(
-                          'by Prasanna Caterers',
-                          style: GoogleFonts.roboto(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white60,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-
-            // Elegant bottom progress bar
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 80),
-                child: SizedBox(
-                  width: 120,
-                  child: LinearProgressIndicator(
-                    value: _controller.value,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Colors.white,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                    minHeight: 4,
                   ),
+                );
+              },
+            ),
+          ),
+
+          // Main Content
+          Center(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo with scale + soft shadow
+                    ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 20 + (10 * _glowAnimation.value),
+                              spreadRadius: 5 * _glowAnimation.value,
+                            ),
+                            BoxShadow(
+                              color: const Color(
+                                0xFF0A1D56,
+                              ).withValues(alpha: 0.08),
+                              blurRadius: 40,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: Image.asset(
+                            'assets/images/logo-removebg.png',
+                            width: 160,
+                            height: 160,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 60),
+
+                    // App Name
+                    FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: Text(
+                          'FAMT Mess App',
+                          style: GoogleFonts.poppins(
+                            fontSize: 36,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(
+                              0xFF0A1D56,
+                            ), // Professional Deep Blue
+                            letterSpacing: 1.2,
+                            height: 1.2,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Tagline
+                    FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: _slideAnimation,
+                        child: Text(
+                          'Meals — Managed Smartly',
+                          style: GoogleFonts.roboto(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.black54,
+                            letterSpacing: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Powered by
+                    FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: Text(
+                        'by Prasanna Caterers',
+                        style: GoogleFonts.roboto(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[400],
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // Elegant bottom progress bar
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 80),
+              child: SizedBox(
+                width: 120,
+                child: LinearProgressIndicator(
+                  value: _controller.value,
+                  backgroundColor: Colors.grey[200],
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    Color(0xFF0A1D56),
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  minHeight: 4,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

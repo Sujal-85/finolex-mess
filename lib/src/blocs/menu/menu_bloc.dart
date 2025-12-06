@@ -16,7 +16,19 @@ class MenuBloc extends Bloc<MenuEvent, MenuState> {
     emit(state.copyWith(status: MenuStatus.loading));
     try {
       final api = ApiService();
-      final response = await api.get('/menu');
+      // Format date to 'Monday', 'Tuesday', etc.
+      final date = event.date ?? DateTime.now();
+      final day = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ][date.weekday - 1];
+
+      final response = await api.get('/menu', queryParameters: {'day': day});
       final List<dynamic> data = response.data;
       final List<Map<String, dynamic>> menuItems =
           List<Map<String, dynamic>>.from(data);

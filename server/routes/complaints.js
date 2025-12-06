@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Complaint = require('../models/Complaint');
+const Notification = require('../models/Notification');
 
 // Get all complaints or filter by studentId
 router.get('/', async (req, res) => {
@@ -32,6 +33,18 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
     try {
         const complaint = await Complaint.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+        // Create notification for the student
+        if (complaint && req.body.status) {
+            const notification = new Notification({
+                userId: complaint.studentId, // Assuming studentId is the User ID
+                title: 'Complaint Update',
+                description: `Your complaint "${complaint.title}" has been updated to ${complaint.status}.`,
+                type: 'urgent'
+            });
+            await notification.save();
+        }
+
         res.json(complaint);
     } catch (err) {
         res.status(400).json({ message: err.message });

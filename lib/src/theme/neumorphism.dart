@@ -15,10 +15,10 @@ class NeumorphicStyle {
 
     // Subtle shadow for light mode, deeper for dark
     final Color shadowColor = isDark
-        ? Colors.black.withValues(alpha: 0.3)
+        ? Colors.black.withOpacity(0.3)
         : AppColors.shadowLight;
     final Color highlightColor = isDark
-        ? Colors.white.withValues(alpha: 0.05)
+        ? Colors.white.withOpacity(0.05)
         : Colors.white;
 
     if (isPressed) {
@@ -84,7 +84,7 @@ class NeumorphicStyle {
           ? []
           : [
               BoxShadow(
-                color: baseColor.withValues(alpha: shadowIntensity),
+                color: baseColor.withOpacity(shadowIntensity),
                 offset: const Offset(4, 4),
                 blurRadius: 8,
               ),

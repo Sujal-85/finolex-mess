@@ -49,7 +49,7 @@ router.post('/email/send', async (req, res) => {
         otpStore.set(email, { otp, expires: Date.now() + 10 * 60 * 1000 }); // 10 mins
 
         await transporter.sendMail({
-            from: 'Finolex Canteen <t240671@famt.ac.in>',
+            from: 'Finolex Canteen <khedekarsujay720@gmail.com>',
             to: email,
             subject: 'Email Verification OTP',
             text: `Your OTP for Finolex Canteen registration is: ${otp}. It expires in 10 minutes.`
@@ -57,15 +57,10 @@ router.post('/email/send', async (req, res) => {
 
         res.json({ success: true, message: 'OTP sent to email' });
     } catch (error) {
-        console.error('Email OTP Error (Falling back to Mock OTP):', error);
-
-        // Fallback to mock OTP
-        const mockOtp = '123456';
-        otpStore.set(req.body.email, { otp: mockOtp, expires: Date.now() + 10 * 60 * 1000 });
-
-        res.json({
-            success: true,
-            message: 'OTP sent (Mock Mode: 123456) - Email failed but you can use this code.'
+        console.error('Email OTP Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send OTP. Please check email address or try again later.'
         });
     }
 });
@@ -92,16 +87,21 @@ router.post('/mobile/send', async (req, res) => {
         const { phone } = req.body;
         if (!phone) return res.status(400).json({ message: 'Phone number is required' });
 
-        // Fixed OTP for development/mock mode
-        const otp = '123456';
+        const otp = generateOTP();
         otpStore.set(phone, { otp, expires: Date.now() + 10 * 60 * 1000 });
 
-        console.log(`[DEV] Mobile OTP for ${phone}: ${otp}`);
+        await axios.get('https://www.fast2sms.com/dev/bulkV2', {
+            headers: {
+                authorization: FAST2SMS_API_KEY
+            },
+            params: {
+                variables_values: otp,
+                route: 'otp',
+                numbers: phone
+            }
+        });
 
-        // Mock Mode: Skip API call
-        // await axios.get('https://www.fast2sms.com/dev/bulkV2', { ... });
-
-        res.json({ success: true, message: 'OTP sent to mobile (Mock Mode: 123456)' });
+        res.json({ success: true, message: 'OTP sent to mobile' });
     } catch (error) {
         console.error('Mobile OTP Error:', error.response?.data || error.message);
         res.status(500).json({

@@ -56,7 +56,10 @@ class _MenuView extends StatelessWidget {
                   return const MenuSkeleton();
                 } else if (state.status == MenuStatus.failure) {
                   return Center(
-                    child: Text(state.errorMessage ?? 'Error loading menu'),
+                    child: Text(
+                      state.errorMessage ?? 'Error loading menu',
+                      style: TextStyle(color: AppColors.textSecondary(context)),
+                    ),
                   );
                 } else if (state.menuItems.isEmpty) {
                   return Center(
@@ -74,7 +77,7 @@ class _MenuView extends StatelessWidget {
                           'No menu available for this day',
                           style: GoogleFonts.poppins(
                             fontSize: 16,
-                            color: AppColors.textSecondaryLight,
+                            color: AppColors.textSecondary(context),
                           ),
                         ),
                       ],
@@ -82,13 +85,59 @@ class _MenuView extends StatelessWidget {
                   );
                 }
 
-                return ListView.separated(
+                // Group items by mealType
+                final groupedItems = <String, List<Map<String, dynamic>>>{};
+                for (var item in state.menuItems) {
+                  final mealType = (item['mealType'] as String? ?? 'Other')
+                      .toLowerCase();
+                  if (!groupedItems.containsKey(mealType)) {
+                    groupedItems[mealType] = [];
+                  }
+                  groupedItems[mealType]!.add(item);
+                }
+
+                // Define order
+                final order = ['breakfast', 'lunch', 'snacks', 'dinner'];
+                final sortedKeys = groupedItems.keys.toList()
+                  ..sort((a, b) {
+                    final indexA = order.indexOf(a);
+                    final indexB = order.indexOf(b);
+                    return (indexA == -1 ? 999 : indexA).compareTo(
+                      indexB == -1 ? 999 : indexB,
+                    );
+                  });
+
+                return ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: state.menuItems.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    final item = state.menuItems[index];
-                    return _MenuItemCard(item: item);
+                  itemCount: sortedKeys.length,
+                  itemBuilder: (context, sectionIndex) {
+                    final sectionKey = sortedKeys[sectionIndex];
+                    final items = groupedItems[sectionKey]!;
+                    final title =
+                        sectionKey[0].toUpperCase() + sectionKey.substring(1);
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            title,
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                        ...items.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: _MenuItemCard(item: item),
+                          ),
+                        ),
+                      ],
+                    );
                   },
                 );
               },
@@ -135,7 +184,7 @@ class _DateSelector extends StatelessWidget {
                   width: 60,
                   decoration: NeumorphicStyle.cardDecoration(
                     context,
-                    borderRadius: 12,
+                    borderRadius: 16,
                     isPressed: isSelected,
                     color: isSelected ? AppColors.primary : null,
                   ),
@@ -147,8 +196,9 @@ class _DateSelector extends StatelessWidget {
                         style: GoogleFonts.roboto(
                           color: isSelected
                               ? Colors.white
-                              : AppColors.textSecondaryLight,
+                              : AppColors.textSecondary(context),
                           fontWeight: FontWeight.w500,
+                          fontSize: 14,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -179,102 +229,163 @@ class _MenuItemCard extends StatelessWidget {
 
   const _MenuItemCard({required this.item});
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: NeumorphicStyle.cardDecoration(context),
-      child: Row(
-        children: [
-          // Image Placeholder
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppColors.surface(context),
-              borderRadius: BorderRadius.circular(12),
-              image: item['image'] != null && item['image'].startsWith('http')
-                  ? DecorationImage(
-                      image: NetworkImage(item['image']),
-                      fit: BoxFit.cover,
-                    )
-                  : const DecorationImage(
-                      image: AssetImage('assets/images/thali.png'), // Fallback
-                      fit: BoxFit.cover,
-                    ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          // Details
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
+  void _showDetails(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.surface(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
                       item['name'],
                       style: GoogleFonts.poppins(
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
                         color: AppColors.textPrimary(context),
                       ),
                     ),
-                    Icon(
-                      Icons.circle,
-                      size: 12,
-                      color: item['isVeg'] ? Colors.green : Colors.red,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item['description'],
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.roboto(
-                    fontSize: 12,
-                    color: AppColors.textSecondaryLight,
                   ),
+                  Icon(
+                    Icons.circle,
+                    size: 16,
+                    color: item['isVeg'] ? Colors.green : Colors.red,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                item['description'] ?? 'No description available',
+                style: GoogleFonts.roboto(
+                  fontSize: 16,
+                  color: AppColors.textSecondary(context),
+                  height: 1.5,
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '₹${item['price']}',
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '₹${item['price']}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'Close',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: AppColors.primary,
+                        color: Colors.white,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: NeumorphicStyle.buttonDecoration(
-                        context,
-                        borderRadius: 20,
-                        color: AppColors.accent,
-                      ),
-                      child: Text(
-                        'ADD',
-                        style: GoogleFonts.poppins(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showDetails(context),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    item['name'],
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: AppColors.textPrimary(context),
                     ),
-                  ],
+                  ),
+                ),
+                Icon(
+                  Icons.circle,
+                  size: 10,
+                  color: item['isVeg'] ? Colors.green : Colors.red,
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              item['description'] ?? '',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.roboto(
+                fontSize: 14,
+                color: AppColors.textSecondary(context),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '₹${item['price']}',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: AppColors.primary,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 8,
+                  ),
+                  decoration: NeumorphicStyle.buttonDecoration(
+                    context,
+                    borderRadius: 20,
+                    color: AppColors.accent,
+                  ),
+                  child: Text(
+                    'Open',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

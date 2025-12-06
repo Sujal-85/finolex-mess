@@ -5,8 +5,17 @@ import '../neumorphic_card.dart';
 
 class MenuCard extends StatelessWidget {
   final VoidCallback onViewFullMenu;
+  final String breakfastItem;
+  final String lunchItem;
+  final String dinnerItem;
 
-  const MenuCard({super.key, required this.onViewFullMenu});
+  const MenuCard({
+    super.key,
+    required this.onViewFullMenu,
+    required this.breakfastItem,
+    required this.lunchItem,
+    required this.dinnerItem,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -33,18 +42,13 @@ class MenuCard extends StatelessWidget {
           _buildMenuItem(
             context,
             'Breakfast',
-            'Idli Sambar',
+            breakfastItem,
             Icons.breakfast_dining,
           ),
           const SizedBox(height: 8),
-          _buildMenuItem(context, 'Lunch', 'Veg Thali', Icons.lunch_dining),
+          _buildMenuItem(context, 'Lunch', lunchItem, Icons.lunch_dining),
           const SizedBox(height: 8),
-          _buildMenuItem(
-            context,
-            'Dinner',
-            'Paneer Butter Masala',
-            Icons.dinner_dining,
-          ),
+          _buildMenuItem(context, 'Dinner', dinnerItem, Icons.dinner_dining),
           const SizedBox(height: 16),
           Center(
             child: Text(
