@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -32,7 +32,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   double _amount = 1000.0;
   bool _isProcessing = false;
   bool _showSuccess = false;
-  File? _receiptImage;
+  XFile? _receiptImage;
   Timer? _timer;
   int _timeLeft = 300; // 5 minutes
   int _paymentMethodIndex = 0; // 0: QR Code, 1: UPI ID
@@ -103,7 +103,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
-        _receiptImage = File(image.path);
+        _receiptImage = image;
       });
     }
   }
@@ -550,12 +550,20 @@ class _PaymentScreenState extends State<PaymentScreen>
               child: _receiptImage != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: kIsWeb
-                          ? Image.network(
-                              _receiptImage!.path,
+                      child: FutureBuilder<Uint8List>(
+                        future: _receiptImage!.readAsBytes(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return Image.memory(
+                              snapshot.data!,
                               fit: BoxFit.cover,
-                            )
-                          : Image.file(_receiptImage!, fit: BoxFit.cover),
+                            );
+                          }
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        },
+                      ),
                     )
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,
