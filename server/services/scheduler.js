@@ -6,7 +6,7 @@ const scheduler = {
     init: () => {
         console.log('Scheduler initialized...');
 
-        // Morning Greeting (Every day at 8:00 AM)
+        // Morning Greeting (Every day at 8:00 AM IST)
         cron.schedule('0 8 * * *', async () => {
             console.log('Running Morning Greeting Job');
             try {
@@ -20,9 +20,11 @@ const scheduler = {
             } catch (error) {
                 console.error('Error sending morning greeting:', error);
             }
+        }, {
+            timezone: "Asia/Kolkata"
         });
 
-        // Lunch Reminder (Every day at 12:30 PM)
+        // Lunch Reminder (Every day at 12:30 PM IST)
         cron.schedule('30 12 * * *', async () => {
             console.log('Running Lunch Reminder Job');
             try {
@@ -36,9 +38,11 @@ const scheduler = {
             } catch (error) {
                 console.error('Error sending lunch reminder:', error);
             }
+        }, {
+            timezone: "Asia/Kolkata"
         });
 
-        // Dinner Reminder (Every day at 7:30 PM)
+        // Dinner Reminder (Every day at 7:30 PM IST)
         cron.schedule('30 19 * * *', async () => {
             console.log('Running Dinner Reminder Job');
             try {
@@ -52,9 +56,11 @@ const scheduler = {
             } catch (error) {
                 console.error('Error sending dinner reminder:', error);
             }
+        }, {
+            timezone: "Asia/Kolkata"
         });
 
-        // Payment Due Reminder (Every day at 9:00 AM)
+        // Payment Due Reminder (Every day at 9:00 AM IST)
         cron.schedule('0 9 * * *', async () => {
             console.log('Running Payment Reminder Job');
             try {
@@ -92,6 +98,8 @@ const scheduler = {
             } catch (error) {
                 console.error('Error sending payment reminder:', error);
             }
+        }, {
+            timezone: "Asia/Kolkata"
         });
     }
 };

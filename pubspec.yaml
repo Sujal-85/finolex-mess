@@ -58,6 +58,8 @@ dependencies:
   flutter_local_notifications: ^18.0.0  # or your latest
   timezone: ^0.9.0
   share_plus: ^12.0.1
+  easy_upi_payment:
+    path: ./packages/easy_upi_payment
 
 
 

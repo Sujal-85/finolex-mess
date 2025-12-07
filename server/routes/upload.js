@@ -4,30 +4,32 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Configure storage
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        const uploadDir = 'uploads/receipts';
-        // Create directory if it doesn't exist
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-    },
-    filename: function (req, file, cb) {
-        // Generate unique filename: receipt_timestamp_random.ext
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'receipt-' + uniqueSuffix + path.extname(file.originalname));
-    }
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// File filter
+// Configure Cloudinary Storage
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'finolex-canteen/receipts',
+        allowed_formats: ['jpg', 'png', 'jpeg', 'pdf'],
+        // transformation: [{ width: 500, height: 500, crop: 'limit' }] // Optional resizing
+    },
+});
+
+// File filter (Optional as CloudinaryStorage handles formats, but keeping for double check)
 const fileFilter = (req, file, cb) => {
-    // Accept images only
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
         cb(null, true);
     } else {
-        cb(new Error('Only image files are allowed!'), false);
+        cb(new Error('Only image and PDF files are allowed!'), false);
     }
 };
 
@@ -46,14 +48,14 @@ router.post('/', upload.single('receipt'), (req, res) => {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
-        // Return the file URL (relative path)
-        const fileUrl = `/uploads/receipts/${req.file.filename}`;
+        // Return the Cloudinary file URL
         res.json({
             message: 'File uploaded successfully',
-            fileUrl: fileUrl
+            fileUrl: req.file.path // Cloudinary URL
         });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Upload Error:', error);
+        res.status(500).json({ message: error.message || 'Error uploading file' });
     }
 });
 

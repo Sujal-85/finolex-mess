@@ -420,6 +420,18 @@ class ReceiptPreviewScreen extends StatelessWidget {
         // Download PDF button
         GestureDetector(
           onTap: () {
+            if (receiptData['status']?.toString().toLowerCase() != 'success' &&
+                receiptData['status']?.toString().toLowerCase() != 'paid') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Receipt can only be downloaded for approved transactions.',
+                  ),
+                  backgroundColor: AppColors.warning,
+                ),
+              );
+              return;
+            }
             // In a real app, this would download the PDF
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -433,21 +445,36 @@ class ReceiptPreviewScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 18),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(25),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.primary,
-                  AppColors.primary.withValues(alpha: 0.8),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+              gradient:
+                  (receiptData['status']?.toString().toLowerCase() ==
+                          'success' ||
+                      receiptData['status']?.toString().toLowerCase() == 'paid')
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withValues(alpha: 0.8),
+                      ],
+                    )
+                  : LinearGradient(
+                      colors: [
+                        AppColors.textSecondaryLight.withOpacity(0.3),
+                        AppColors.textSecondaryLight.withOpacity(0.3),
+                      ],
+                    ),
+              boxShadow:
+                  (receiptData['status']?.toString().toLowerCase() ==
+                          'success' ||
+                      receiptData['status']?.toString().toLowerCase() == 'paid')
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : [],
             ),
             child: Center(
               child: Text(
@@ -467,6 +494,18 @@ class ReceiptPreviewScreen extends StatelessWidget {
         // Share Receipt button
         GestureDetector(
           onTap: () {
+            if (receiptData['status']?.toString().toLowerCase() != 'success' &&
+                receiptData['status']?.toString().toLowerCase() != 'paid') {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Receipt can only be shared for approved transactions.',
+                  ),
+                  backgroundColor: AppColors.warning,
+                ),
+              );
+              return;
+            }
             // In a real app, this would share the receipt
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -488,7 +527,13 @@ class ReceiptPreviewScreen extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textPrimary(context),
+                  color:
+                      (receiptData['status']?.toString().toLowerCase() ==
+                              'success' ||
+                          receiptData['status']?.toString().toLowerCase() ==
+                              'paid')
+                      ? AppColors.textPrimary(context)
+                      : AppColors.textSecondaryLight.withOpacity(0.5),
                 ),
               ),
             ),
