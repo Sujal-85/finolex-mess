@@ -175,44 +175,51 @@ class _ProfileScreenState extends State<ProfileScreen>
       backgroundColor: AppColors.background(context),
       body: _isLoading
           ? _buildLoadingSkeleton()
-          : SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  // Header section
-                  _buildHeaderSection(),
+          : Column(
+              children: [
+                // Header section - Fixed
+                _buildHeaderSection(),
 
-                  const SizedBox(height: 24),
+                // Scrollable content
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 24),
 
-                  // Information cards
-                  _buildInformationCards(),
+                        // Information cards
+                        _buildInformationCards(),
 
-                  const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                  // Quick actions row
-                  _buildQuickActions(),
+                        // Quick actions row
+                        _buildQuickActions(),
 
-                  const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                  // Settings section
-                  _buildSettingsSection(),
+                        // Settings section
+                        _buildSettingsSection(),
 
-                  const SizedBox(height: 24),
+                        const SizedBox(height: 24),
 
-                  Center(
-                    child: Text(
-                      'By Prasanna Caterers',
-                      style: GoogleFonts.playfairDisplay(
-                        fontSize: 16,
-                        fontStyle: FontStyle.italic,
-                        color: AppColors.textSecondaryLight,
-                      ),
+                        Center(
+                          child: Text(
+                            'By Prasanna Caterers',
+                            style: GoogleFonts.playfairDisplay(
+                              fontSize: 16,
+                              fontStyle: FontStyle.italic,
+                              color: AppColors.textSecondaryLight,
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-                ],
-              ),
+                ),
+              ],
             ),
     );
   }
@@ -716,9 +723,16 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       SettingItem(
         icon: Icons.privacy_tip_outlined,
-        label: 'Privacy & Terms',
+        label: 'Privacy Policy',
         onTap: () {
-          context.push('/about');
+          context.push('/privacy');
+        },
+      ),
+      SettingItem(
+        icon: Icons.description_outlined,
+        label: 'Terms of Service',
+        onTap: () {
+          context.push('/terms');
         },
       ),
       SettingItem(

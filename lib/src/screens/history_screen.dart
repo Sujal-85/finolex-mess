@@ -832,9 +832,21 @@ class ReceiptModal extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
+                    if (transaction.status.toLowerCase() != 'success' &&
+                        transaction.status.toLowerCase() != 'paid') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Receipt sharing is only available for approved transactions.',
+                          ),
+                          backgroundColor: AppColors.warning,
+                        ),
+                      );
+                      return;
+                    }
                     // Close the modal bottom sheet first
                     Navigator.of(context).pop();
-                    // Navigate to receipt preview screen
+                    // Navigate to receipt preview screen (which will also have similar checks, or we can just share directly)
                     context.push(
                       '/receipt-preview',
                       extra: {
@@ -842,6 +854,7 @@ class ReceiptModal extends StatelessWidget {
                         'amount': transaction.amount,
                         'dateTime': transaction.date,
                         'paymentMethod': transaction.paymentMethod,
+                        'status': transaction.status,
                         'referenceId': 'REF1234567890',
                         'studentName': 'John Doe',
                         'hostelBlock': 'A',
@@ -862,7 +875,11 @@ class ReceiptModal extends StatelessWidget {
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
-                          color: AppColors.textPrimary(context),
+                          color:
+                              (transaction.status.toLowerCase() == 'success' ||
+                                  transaction.status.toLowerCase() == 'paid')
+                              ? AppColors.textPrimary(context)
+                              : AppColors.textSecondaryLight.withOpacity(0.5),
                         ),
                       ),
                     ),
@@ -873,6 +890,18 @@ class ReceiptModal extends StatelessWidget {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
+                    if (transaction.status.toLowerCase() != 'success' &&
+                        transaction.status.toLowerCase() != 'paid') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Receipt download is only available for approved transactions.',
+                          ),
+                          backgroundColor: AppColors.warning,
+                        ),
+                      );
+                      return;
+                    }
                     // Close the modal bottom sheet first
                     Navigator.of(context).pop();
                     // Navigate to receipt preview screen
@@ -883,6 +912,7 @@ class ReceiptModal extends StatelessWidget {
                         'amount': transaction.amount,
                         'dateTime': transaction.date,
                         'paymentMethod': transaction.paymentMethod,
+                        'status': transaction.status,
                         'referenceId': 'REF1234567890',
                         'studentName': 'John Doe',
                         'hostelBlock': 'A',
@@ -896,7 +926,11 @@ class ReceiptModal extends StatelessWidget {
                     decoration: NeumorphicStyle.buttonDecoration(
                       context,
                       borderRadius: 20,
-                      color: AppColors.primary,
+                      color:
+                          (transaction.status.toLowerCase() == 'success' ||
+                              transaction.status.toLowerCase() == 'paid')
+                          ? AppColors.primary
+                          : AppColors.textSecondaryLight.withOpacity(0.3),
                     ),
                     child: Center(
                       child: Text(

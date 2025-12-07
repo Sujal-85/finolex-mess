@@ -448,6 +448,22 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen>
                                 // Download PDF
                                 GestureDetector(
                                   onTap: () {
+                                    if (receipt.status.toLowerCase() !=
+                                            'success' &&
+                                        receipt.status.toLowerCase() !=
+                                            'paid') {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Receipt can only be generated for approved transactions.',
+                                          ),
+                                          backgroundColor: AppColors.warning,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     receiptService.downloadReceipt(receipt.id);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -461,7 +477,14 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen>
                                   child: Icon(
                                     Icons.download_outlined,
                                     size: 20,
-                                    color: AppColors.textSecondaryLight,
+                                    color:
+                                        (receipt.status.toLowerCase() ==
+                                                'success' ||
+                                            receipt.status.toLowerCase() ==
+                                                'paid')
+                                        ? AppColors.textSecondaryLight
+                                        : AppColors.textSecondaryLight
+                                              .withOpacity(0.3),
                                   ),
                                 ),
 
@@ -470,6 +493,22 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen>
                                 // Share
                                 GestureDetector(
                                   onTap: () {
+                                    if (receipt.status.toLowerCase() !=
+                                            'success' &&
+                                        receipt.status.toLowerCase() !=
+                                            'paid') {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Receipt can only be shared for approved transactions.',
+                                          ),
+                                          backgroundColor: AppColors.warning,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     receiptService.shareReceipt(receipt.id);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -483,7 +522,14 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen>
                                   child: Icon(
                                     Icons.share_outlined,
                                     size: 20,
-                                    color: AppColors.textSecondaryLight,
+                                    color:
+                                        (receipt.status.toLowerCase() ==
+                                                'success' ||
+                                            receipt.status.toLowerCase() ==
+                                                'paid')
+                                        ? AppColors.textSecondaryLight
+                                        : AppColors.textSecondaryLight
+                                              .withOpacity(0.3),
                                   ),
                                 ),
                               ],

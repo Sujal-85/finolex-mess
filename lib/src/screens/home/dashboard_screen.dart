@@ -247,6 +247,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 announcement: state.latestAnnouncement,
                                 onTap: () => context.push('/news'),
                               ),
+
+                              const SizedBox(height: 40),
+
+                              // Footer
+                              Center(
+                                child: Column(
+                                  children: [
+                                    Opacity(
+                                      opacity: 0.7,
+                                      child: Image.asset(
+                                        'assets/images/logo-circle.png',
+                                        height: 50,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'By Prasanna Caterers',
+                                      style: GoogleFonts.playfairDisplay(
+                                        fontSize: 16,
+                                        fontStyle: FontStyle.italic,
+                                        color: AppColors.textSecondaryLight,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 40),
                             ],
                           ),
                         ),

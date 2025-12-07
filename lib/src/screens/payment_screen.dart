@@ -1,16 +1,17 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:dio/dio.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_upi_payment/easy_upi_payment.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import '../services/auth_service.dart';
+import '../services/payment_service.dart';
 import '../widgets/profile_style_header.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -38,8 +39,9 @@ class _PaymentScreenState extends State<PaymentScreen>
   bool _isUpiVerified = false;
 
   // Services
+  // Services
   final AuthService _authService = AuthService();
-  final Dio _dio = Dio();
+  final PaymentService _paymentService = PaymentService();
   final ImagePicker _picker = ImagePicker();
   Map<String, dynamic>? _user;
 
@@ -92,7 +94,7 @@ class _PaymentScreenState extends State<PaymentScreen>
 
   void _updateAmount(double newAmount) {
     setState(() {
-      _amount = newAmount < 1000 ? 1000 : newAmount;
+      _amount = newAmount < 0 ? 0 : newAmount;
       _amountController.text = _amount.toStringAsFixed(0);
     });
   }
@@ -137,22 +139,10 @@ class _PaymentScreenState extends State<PaymentScreen>
 
     try {
       String? receiptUrl;
-      const String baseUrl = 'http://localhost:3000/api';
 
       // 1. Upload Receipt if present
       if (_receiptImage != null) {
-        String fileName = _receiptImage!.path.split('/').last;
-        FormData formData = FormData.fromMap({
-          "receipt": await MultipartFile.fromFile(
-            _receiptImage!.path,
-            filename: fileName,
-          ),
-        });
-        final uploadResponse = await _dio.post(
-          '$baseUrl/upload',
-          data: formData,
-        );
-        receiptUrl = uploadResponse.data['fileUrl'];
+        receiptUrl = await _paymentService.uploadReceipt(_receiptImage!);
       }
 
       // 2. Create Transaction
@@ -167,7 +157,7 @@ class _PaymentScreenState extends State<PaymentScreen>
             : 'QR_SCAN',
       };
 
-      await _dio.post('$baseUrl/payments/manual-upi', data: transactionData);
+      await _paymentService.createManualTransaction(transactionData);
 
       setState(() {
         _isProcessing = false;
@@ -190,35 +180,59 @@ class _PaymentScreenState extends State<PaymentScreen>
     }
   }
 
-  Future<void> _launchUpiApp({String? appScheme}) async {
-    const String vpa = 'sandeeptambe86@okicici';
-    const String name = 'Sandeep Tambe';
-    final String uri =
-        'upi://pay?pa=$vpa&pn=$name&am=$_amount&cu=INR'; // Standard UPI intent
+  Future<void> _startUpiPayment({String? appScheme}) async {
+    final transactionId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    Uri launchUri = Uri.parse(uri);
-    if (appScheme != null) {
-      // If specific app scheme is requested (e.g. phonepe://)
-      // Note: Usually we launch the intent with the package or scheme.
-      // For simplicity, we stick to the standard intent which Android handles by showing the chooser.
-      // Or we can try to launch specific scheme if we knew the format.
-      // But standard 'upi://' is best for "Detect automatically".
-    }
-
-    if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
-      // After launching, we start the timer screen for UPI flow
-      setState(() {
-        _currentStep = 1; // Timer Screen
-      });
-      _startTimer();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No UPI app found to handle this request'),
+    try {
+      final res = await EasyUpiPaymentPlatform.instance.startPayment(
+        EasyUpiPaymentModel(
+          payeeVpa: 'sandeeptambe86@okicici',
+          payeeName: 'Sandeep Tambe',
+          amount: _amount,
+          transactionRefId: transactionId,
+          description: 'Canteen Wallet Topup',
         ),
       );
+
+      print('UPI Response: $res'); // Debugging
+
+      if (res != null) {
+        if (res.responseCode == '00' ||
+            res.responseCode?.toLowerCase() == 'success') {
+          // Success
+          _submitPayment(isQr: false);
+        } else if (res.responseCode == '01' ||
+            res.responseCode?.toLowerCase() == 'failure') {
+          // Failure
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment Failed. Please try again.')),
+          );
+        } else {
+          // Submitted / Pending / User Cancelled (often returns captured response)
+          // If user cancelled, usually we get 'failure' or null.
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Transaction Status: ${res.responseCode ?? "Cancelled"}',
+              ),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Transaction Cancelled')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  // Wrapper to match existing signature if needed, or just replace usages
+  Future<void> _launchUpiApp({String? appScheme}) async {
+    await _startUpiPayment(appScheme: appScheme);
   }
 
   @override
@@ -348,7 +362,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                       ),
                       onChanged: (value) {
                         if (value.isNotEmpty) {
-                          final amount = double.tryParse(value) ?? 1000.0;
+                          final amount = double.tryParse(value) ?? 0.0;
                           setState(() {
                             _amount = amount;
                           });
@@ -374,10 +388,10 @@ class _PaymentScreenState extends State<PaymentScreen>
               ),
               const SizedBox(height: 20),
               Text(
-                'Minimum amount: ₹1000',
+                'Minimum amount: ₹0',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  color: _amount < 1000
+                  color: _amount < 0
                       ? Colors.red
                       : AppColors.textSecondaryLight,
                 ),
@@ -536,7 +550,12 @@ class _PaymentScreenState extends State<PaymentScreen>
               child: _receiptImage != null
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: Image.file(_receiptImage!, fit: BoxFit.cover),
+                      child: kIsWeb
+                          ? Image.network(
+                              _receiptImage!.path,
+                              fit: BoxFit.cover,
+                            )
+                          : Image.file(_receiptImage!, fit: BoxFit.cover),
                     )
                   : Column(
                       mainAxisAlignment: MainAxisAlignment.center,

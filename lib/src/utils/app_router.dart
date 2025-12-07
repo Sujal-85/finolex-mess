@@ -22,6 +22,8 @@ import '../screens/all_receipts_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/profile/change_password_screen.dart';
 import '../screens/profile/id_card_screen.dart';
+import '../screens/settings/privacy_policy_screen.dart';
+import '../screens/settings/terms_screen.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../theme/animations.dart';
 
@@ -233,6 +235,20 @@ class AppRouter {
         pageBuilder: (context, state) => AppAnimations.transitionPage(
           key: state.pageKey,
           child: const IdCardScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/privacy',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const PrivacyPolicyScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/terms',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const TermsScreen(),
         ),
       ),
     ],
