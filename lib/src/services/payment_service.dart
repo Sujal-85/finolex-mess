@@ -1,17 +1,32 @@
-import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'api_service.dart';
 
 class PaymentService {
   final ApiService _api = ApiService();
 
-  Future<String?> uploadReceipt(File file) async {
+  Future<String?> uploadReceipt(dynamic file) async {
     try {
       String fileName = file.path.split('/').last;
-      FormData formData = FormData.fromMap({
-        "receipt": await MultipartFile.fromFile(file.path, filename: fileName),
-      });
+
+      FormData formData;
+      if (kIsWeb) {
+        // For web: read file as bytes
+        final bytes = await file.readAsBytes();
+        formData = FormData.fromMap({
+          "receipt": MultipartFile.fromBytes(bytes, filename: fileName),
+        });
+      } else {
+        // For mobile: use file path
+        formData = FormData.fromMap({
+          "receipt": await MultipartFile.fromFile(
+            file.path,
+            filename: fileName,
+          ),
+        });
+      }
+
       final response = await _api.post('/upload', data: formData);
       return response.data['fileUrl'];
     } catch (e) {

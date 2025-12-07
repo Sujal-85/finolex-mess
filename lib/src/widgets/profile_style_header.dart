@@ -58,7 +58,7 @@ class ProfileStyleHeader extends StatelessWidget {
               children: [
                 if (showBackButton)
                   GestureDetector(
-                    onTap: onBackTap ?? () => context.pop(),
+                    onTap: onBackTap ?? () => GoRouter.of(context).pop(),
                     child: Container(
                       width: 40,
                       height: 40,
