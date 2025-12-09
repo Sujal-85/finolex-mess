@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
 import '../../services/auth_service.dart';
@@ -56,17 +56,41 @@ class _IdCardScreenState extends State<IdCardScreen> {
             },
           ),
         );
+        
+        final pdfBytes = await doc.save();
+        var savedPath = '';
 
-        await Printing.sharePdf(
-          bytes: await doc.save(),
-          filename: 'famt_id_card.pdf',
-        );
+        if (Platform.isAndroid) {
+          // Request storage permission if needed (mainly for Android < 10)
+          var status = await Permission.storage.status;
+          if (!status.isGranted) {
+             status = await Permission.storage.request();
+          }
+          
+          // Try standard Download directory for user visibility
+          final dir = Directory('/storage/emulated/0/Download');
+          if (await dir.exists()) {
+             savedPath = '${dir.path}/famt_id_card_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          } else {
+             // Fallback
+             final extDir = await getExternalStorageDirectory();
+             savedPath = '${extDir?.path ?? '/storage/emulated/0/Download'}/famt_id_card_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          }
+        } else {
+          // iOS: standard documents directory
+          final dir = await getApplicationDocumentsDirectory();
+          savedPath = '${dir.path}/famt_id_card.pdf';
+        }
+
+        final file = File(savedPath);
+        await file.writeAsBytes(pdfBytes);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ID Card ready for download/sharing'),
+            SnackBar(
+              content: Text('Saved to: $savedPath'),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
             ),
           );
         }

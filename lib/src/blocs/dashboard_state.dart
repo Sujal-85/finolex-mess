@@ -22,6 +22,7 @@ class DashboardLoaded extends DashboardState {
   final String roomNumber;
   final List<Map<String, dynamic>> birthdays;
   final List<dynamic> recentTransactions;
+  final double pendingAmount;
 
   final String breakfastItem;
   final String lunchItem;
@@ -41,6 +42,7 @@ class DashboardLoaded extends DashboardState {
     required this.roomNumber,
     this.birthdays = const [],
     this.recentTransactions = const [],
+    this.pendingAmount = 0.0,
   });
 
   DashboardLoaded copyWith({
@@ -57,6 +59,7 @@ class DashboardLoaded extends DashboardState {
     String? roomNumber,
     List<Map<String, dynamic>>? birthdays,
     List<dynamic>? recentTransactions,
+    double? pendingAmount,
   }) {
     return DashboardLoaded(
       balance: balance ?? this.balance,
@@ -72,6 +75,7 @@ class DashboardLoaded extends DashboardState {
       roomNumber: roomNumber ?? this.roomNumber,
       birthdays: birthdays ?? this.birthdays,
       recentTransactions: recentTransactions ?? this.recentTransactions,
+      pendingAmount: pendingAmount ?? this.pendingAmount,
     );
   }
 
@@ -90,6 +94,7 @@ class DashboardLoaded extends DashboardState {
     roomNumber,
     birthdays,
     recentTransactions,
+    pendingAmount,
   ];
 }
 

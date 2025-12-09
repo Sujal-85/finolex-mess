@@ -4,8 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   late Dio _dio;
-  final String baseUrl = 'https://finolex-mess.onrender.com/api';
-  // 'http://localhost:4000/api'; // Use 10.0.2.2 for Android emulator
+  final String baseUrl =
+    // 'https://finolexmess.onrender.com/api';
+    'http://192.168.158.157:4000/api'; // Use for Physical Device (LAN IP)
 
   factory ApiService() {
     return _instance;

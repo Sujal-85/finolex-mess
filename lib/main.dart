@@ -71,7 +71,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (context) => NotificationService()),
         ChangeNotifierProvider(create: (context) => SettingsService()),
-        ChangeNotifierProvider(create: (context) => ReceiptService()),
+        Provider(create: (context) => ReceiptService()),
       ],
       child: MultiBlocProvider(
         providers: [BlocProvider(create: (context) => DashboardBloc())],

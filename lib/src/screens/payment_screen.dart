@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -45,18 +44,46 @@ class _PaymentScreenState extends State<PaymentScreen>
   final ImagePicker _picker = ImagePicker();
   Map<String, dynamic>? _user;
 
+  double _maxPayable = 3500.0;
+
   @override
   void initState() {
     super.initState();
     _fetchUser();
+    // Default initial, will update after user fetch
     _amountController.text = _amount.toStringAsFixed(0);
   }
 
   Future<void> _fetchUser() async {
     final user = await _authService.getUser();
-    setState(() {
-      _user = user;
-    });
+    if (user != null) {
+      double balance = (user['balance'] ?? 0).toDouble();
+
+      // Similar to DashboardBloc/ProfileScreen, check for 'Completed' transactions
+      // and add them to the balance manually until backend syncs.
+      try {
+        final transactions = await _paymentService.fetchTransactionHistory(
+          user['id'] ?? user['_id'],
+        );
+        final completedUnsynced = transactions
+            .where((t) => t['status'] == 'Completed')
+            .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
+
+        balance += completedUnsynced;
+      } catch (e) {
+        debugPrint('Error fetching transactions for balance check: $e');
+      }
+
+      final double remaining = 3500.0 - balance;
+      final double initialAmount = remaining > 0 ? remaining : 0;
+
+      setState(() {
+        _user = user;
+        _maxPayable = remaining > 0 ? remaining : 0;
+        _amount = initialAmount;
+        _amountController.text = _amount.toStringAsFixed(0);
+      });
+    }
   }
 
   @override
@@ -67,6 +94,7 @@ class _PaymentScreenState extends State<PaymentScreen>
     super.dispose();
   }
 
+  // ... (existing timer methods) ...
   void _startTimer() {
     _timeLeft = 300;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -93,8 +121,13 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   void _updateAmount(double newAmount) {
+    // Clamp between 0 and _maxPayable
+    double validAmount = newAmount;
+    if (validAmount < 0) validAmount = 0;
+    if (validAmount > _maxPayable) validAmount = _maxPayable;
+
     setState(() {
-      _amount = newAmount < 0 ? 0 : newAmount;
+      _amount = validAmount;
       _amountController.text = _amount.toStringAsFixed(0);
     });
   }
@@ -388,10 +421,10 @@ class _PaymentScreenState extends State<PaymentScreen>
               ),
               const SizedBox(height: 20),
               Text(
-                'Minimum amount: ₹0',
+                'Max payable: ₹${_maxPayable.toStringAsFixed(0)}',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  color: _amount < 0
+                  color: _amount > _maxPayable
                       ? Colors.red
                       : AppColors.textSecondaryLight,
                 ),
