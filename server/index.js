@@ -81,6 +81,10 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         // Serve uploaded files statically
         app.use('/uploads', express.static('uploads'));
 
+        app.get('/ping', (req, res) => {
+            res.status(200).send('pong');
+        });
+
         app.get('/', (req, res) => {
             res.send('Finolex Canteen Server is Running');
         });

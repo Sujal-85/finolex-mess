@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "334321723232",
+    "project_id": "prasanna-caterers",
+    "storage_bucket": "prasanna-caterers.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:334321723232:android:4499888808fe22edc4a005",
+        "android_client_info": {
+          "package_name": "com.example.finolex_student"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7edaATqypizykmBnQjVf3d6KRsH7R6n0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

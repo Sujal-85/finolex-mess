@@ -81,11 +81,15 @@ class _LoginScreenState extends State<LoginScreen>
           const Duration(seconds: 3),
         ); // Adjust based on animation length
         // Show Welcome Notification
-        await LocalNotificationService().showNotification(
-          id: 1,
-          title: 'Welcome to Prasanna Caterers! 👋',
-          body: 'We are glad to have you back. Check out today\'s menu!',
-        );
+        try {
+          await LocalNotificationService().showNotification(
+            id: 1,
+            title: 'Welcome to Prasanna Caterers! 👋',
+            body: 'We are glad to have you back. Check out today\'s menu!',
+          );
+        } catch (e) {
+          debugPrint('Failed to show welcome notification: $e');
+        }
 
         if (mounted) context.go('/home');
       } else {

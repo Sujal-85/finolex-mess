@@ -19,6 +19,17 @@ router.post('/manual-upi', async (req, res) => {
         });
         await transaction.save();
 
+        // Create Notification for Submission
+        const Notification = require('../models/Notification');
+        const notification = new Notification({
+            userId: studentId,
+            title: 'Payment Submitted ⏳',
+            description: `Your payment of ₹${amount} is pending approval.`,
+            type: 'payment',
+            isNew: true
+        });
+        await notification.save();
+
         // Note: Balance is NOT updated here. It will be updated by admin upon approval.
 
         res.json({ message: 'Payment submitted for review', status: 'Pending' });

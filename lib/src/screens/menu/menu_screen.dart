@@ -50,97 +50,118 @@ class _MenuView extends StatelessWidget {
           ),
           const _DateSelector(),
           Expanded(
-            child: BlocBuilder<MenuBloc, MenuState>(
-              builder: (context, state) {
-                if (state.status == MenuStatus.loading) {
-                  return const MenuSkeleton();
-                } else if (state.status == MenuStatus.failure) {
-                  return Center(
-                    child: Text(
-                      state.errorMessage ?? 'Error loading menu',
-                      style: TextStyle(color: AppColors.textSecondary(context)),
-                    ),
-                  );
-                } else if (state.menuItems.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Lottie.asset(
-                          'assets/lottie/Not found error.json',
-                          width: 200,
-                          height: 200,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No menu available for this day',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: AppColors.textSecondary(context),
+child: RefreshIndicator(
+              onRefresh: () async {
+                final bloc = context.read<MenuBloc>();
+                bloc.add(MenuLoadRequested(date: bloc.state.selectedDate));
+                await Future.delayed(const Duration(seconds: 1));
+              },
+              child: BlocBuilder<MenuBloc, MenuState>(
+                builder: (context, state) {
+                  if (state.status == MenuStatus.loading) {
+                    return const MenuSkeleton();
+                  } else if (state.status == MenuStatus.failure) {
+                    return SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.7,
+                        child: Center(
+                          child: Text(
+                            state.errorMessage ?? 'Error loading menu',
+                            style: TextStyle(
+                                color: AppColors.textSecondary(context)),
                           ),
                         ),
-                      ],
-                    ),
-                  );
-                }
-
-                // Group items by mealType
-                final groupedItems = <String, List<Map<String, dynamic>>>{};
-                for (var item in state.menuItems) {
-                  final mealType = (item['mealType'] as String? ?? 'Other')
-                      .toLowerCase();
-                  if (!groupedItems.containsKey(mealType)) {
-                    groupedItems[mealType] = [];
-                  }
-                  groupedItems[mealType]!.add(item);
-                }
-
-                // Define order
-                final order = ['breakfast', 'lunch', 'snacks', 'dinner'];
-                final sortedKeys = groupedItems.keys.toList()
-                  ..sort((a, b) {
-                    final indexA = order.indexOf(a);
-                    final indexB = order.indexOf(b);
-                    return (indexA == -1 ? 999 : indexA).compareTo(
-                      indexB == -1 ? 999 : indexB,
+                      ),
                     );
-                  });
+                  } else if (state.menuItems.isEmpty) {
+                    return SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.7,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Lottie.asset(
+                                'assets/lottie/Not found error.json',
+                                width: 200,
+                                height: 200,
+                                fit: BoxFit.contain,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No menu available for this day',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  color: AppColors.textSecondary(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: sortedKeys.length,
-                  itemBuilder: (context, sectionIndex) {
-                    final sectionKey = sortedKeys[sectionIndex];
-                    final items = groupedItems[sectionKey]!;
-                    final title =
-                        sectionKey[0].toUpperCase() + sectionKey.substring(1);
+                  // Group items by mealType
+                  final groupedItems = <String, List<Map<String, dynamic>>>{};
+                  for (var item in state.menuItems) {
+                    final mealType = (item['mealType'] as String? ?? 'Other')
+                        .toLowerCase();
+                    if (!groupedItems.containsKey(mealType)) {
+                      groupedItems[mealType] = [];
+                    }
+                    groupedItems[mealType]!.add(item);
+                  }
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            title,
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
+                  // Define order
+                  final order = ['breakfast', 'lunch', 'snacks', 'dinner'];
+                  final sortedKeys = groupedItems.keys.toList()
+                    ..sort((a, b) {
+                      final indexA = order.indexOf(a);
+                      final indexB = order.indexOf(b);
+                      return (indexA == -1 ? 999 : indexA).compareTo(
+                        indexB == -1 ? 999 : indexB,
+                      );
+                    });
+
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: sortedKeys.length,
+                    itemBuilder: (context, sectionIndex) {
+                      final sectionKey = sortedKeys[sectionIndex];
+                      final items = groupedItems[sectionKey]!;
+                      final title =
+                          sectionKey[0].toUpperCase() + sectionKey.substring(1);
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Text(
+                              title,
+                              style: GoogleFonts.poppins(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
                             ),
                           ),
-                        ),
-                        ...items.map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _MenuItemCard(item: item),
+                          ...items.map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: _MenuItemCard(item: item),
+                            ),
                           ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
