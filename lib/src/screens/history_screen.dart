@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import '../services/payment_service.dart';
 import '../services/auth_service.dart';
+import '../services/receipt_service.dart';
+import '../models/transaction.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/profile_style_header.dart';
@@ -33,7 +35,8 @@ class _HistoryScreenState extends State<HistoryScreen>
   final AuthService _authService = AuthService();
 
   // Transaction data
-  List<Transaction> _transactions = [];
+  List<Transaction> _allTransactions = []; // Store all fetched data
+  List<Transaction> _filteredTransactions = []; // Store filtered data
   bool _isLoading = true;
 
   @override
@@ -58,17 +61,19 @@ class _HistoryScreenState extends State<HistoryScreen>
           user['_id'],
         );
         setState(() {
-          _transactions = history
+          _allTransactions = history
               .map(
                 (data) => Transaction(
                   id: data['razorpayOrderId'] ?? 'Unknown',
                   amount: (data['amount'] ?? 0).toDouble(),
                   date: DateTime.parse(data['date']),
-                  paymentMethod: 'Online', // Default for Razorpay
+                  paymentMethod: data['upiId'] != null ? 'UPI' : 'Online',
                   status: data['status'] ?? 'Pending',
+                  upiId: data['upiId'],
                 ),
               )
               .toList();
+          _filteredTransactions = List.from(_allTransactions);
           _isLoading = false;
         });
       }
@@ -86,8 +91,35 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   void _applyFilters() {
-    // In a real app, this would filter the transactions
     setState(() {
+      _filteredTransactions = _allTransactions.where((t) {
+        bool matchesDate = true;
+        bool matchesType = true;
+        bool matchesStatus = true;
+
+        if (_dateRange != null) {
+          // Check if date is within range (inclusive)
+          final start = _dateRange!.start.subtract(const Duration(days: 1));
+          final end = _dateRange!.end.add(const Duration(days: 1));
+          matchesDate = t.date.isAfter(start) && t.date.isBefore(end);
+        }
+
+        if (_selectedPaymentType != null) {
+          // Simple string match for now, assuming types map roughly
+          // Adjust logic if types need mapping (e.g. 'Net Banking' vs 'Online')
+          matchesType = t.paymentMethod == _selectedPaymentType;
+          if (_selectedPaymentType == 'UPI' && t.paymentMethod == 'Online') {
+            matchesType = true; // Temporary fallback
+          }
+        }
+
+        if (_selectedStatus != null) {
+          matchesStatus = t.status == _selectedStatus;
+        }
+
+        return matchesDate && matchesType && matchesStatus;
+      }).toList();
+
       _showFilters = false;
     });
   }
@@ -97,6 +129,7 @@ class _HistoryScreenState extends State<HistoryScreen>
       _dateRange = null;
       _selectedPaymentType = null;
       _selectedStatus = null;
+      _filteredTransactions = List.from(_allTransactions);
     });
   }
 
@@ -111,8 +144,6 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   void _openReceipt(Transaction transaction) {
-    // Using root navigator to ensure proper context management
-    // Using root navigator to ensure proper context management
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
@@ -131,6 +162,14 @@ class _HistoryScreenState extends State<HistoryScreen>
         children: [
           ProfileStyleHeader(
             title: 'History',
+            showBackButton: true,
+            onBackTap: () {
+              if (GoRouter.of(context).canPop()) {
+                context.pop();
+              } else {
+                context.go('/home'); // Fallback if no history
+              }
+            },
             actions: [
               IconButton(
                 icon: Icon(
@@ -146,7 +185,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               IconButton(
                 icon: const Icon(Icons.download, color: Colors.white),
                 onPressed: () {
-                  // Download statement functionality
+                  context.push('/all-receipts');
                 },
               ),
             ],
@@ -185,7 +224,7 @@ class _HistoryScreenState extends State<HistoryScreen>
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (_transactions.isEmpty) {
+    if (_filteredTransactions.isEmpty) {
       return SliverFillRemaining(
         hasScrollBody: false,
         child: _buildEmptyState(),
@@ -194,7 +233,7 @@ class _HistoryScreenState extends State<HistoryScreen>
 
     // Group transactions by date
     Map<String, List<Transaction>> groupedTransactions = {};
-    for (var transaction in _transactions) {
+    for (var transaction in _filteredTransactions) {
       String dateGroup = _getDateGroup(transaction.date);
       if (groupedTransactions.containsKey(dateGroup)) {
         groupedTransactions[dateGroup]!.add(transaction);
@@ -693,26 +732,63 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 }
 
-class Transaction {
-  final String id;
-  final double amount;
-  final DateTime date;
-  final String paymentMethod;
-  final String status;
-
-  Transaction({
-    required this.id,
-    required this.amount,
-    required this.date,
-    required this.paymentMethod,
-    required this.status,
-  });
-}
-
-class ReceiptModal extends StatelessWidget {
+class ReceiptModal extends StatefulWidget {
   final Transaction transaction;
 
   const ReceiptModal({super.key, required this.transaction});
+
+  @override
+  State<ReceiptModal> createState() => _ReceiptModalState();
+}
+
+class _ReceiptModalState extends State<ReceiptModal> {
+  bool _isDownloading = false;
+
+  Future<void> _handleDownload() async {
+    setState(() => _isDownloading = true);
+    try {
+      final receiptService = ReceiptService();
+      final authService = AuthService();
+      final user = await authService.getUser();
+      if (user != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Generating Receipt...')),
+          );
+        }
+
+        await receiptService.generateAndDownloadReceipt(
+          widget.transaction,
+          user,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Receipt Downloaded!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error downloading: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -781,7 +857,7 @@ class ReceiptModal extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '₹${transaction.amount.toStringAsFixed(2)}',
+                  '₹${widget.transaction.amount.toStringAsFixed(2)}',
                   style: GoogleFonts.poppins(
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -789,80 +865,101 @@ class ReceiptModal extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildDetailRow(context, 'Transaction ID', transaction.id),
+                _buildDetailRow(
+                  context,
+                  'Transaction ID',
+                  widget.transaction.id,
+                ),
                 _buildDetailRow(
                   context,
                   'Date & Time',
-                  DateFormat('MMM dd, yyyy hh:mm a').format(transaction.date),
+                  DateFormat(
+                    'MMM dd, yyyy hh:mm a',
+                  ).format(widget.transaction.date),
                 ),
                 _buildDetailRow(
                   context,
                   'Payment Method',
-                  transaction.paymentMethod,
+                  widget.transaction.paymentMethod,
                 ),
                 _buildDetailRow(
                   context,
                   'Status',
-                  transaction.status,
+                  widget.transaction.status,
                   isStatus: true,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // QR Code placeholder
-          Center(
-            child: Container(
-              width: 120,
-              height: 120,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(12),
+          // Manager Details
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Manager',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Mr. Sandeep Tambe',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary(context),
+                    ),
+                  ),
+                ],
               ),
-              child: Icon(Icons.qr_code, size: 80, color: Colors.grey[600]),
-            ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Image.asset(
+                    'assets/images/manager_signature.png',
+                    height: 40,
+                    errorBuilder: (context, error, stackTrace) => Text(
+                      'Signed',
+                      style: GoogleFonts.greatVibes(
+                        fontSize: 24,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Container(
+                    height: 1,
+                    width: 80,
+                    color: AppColors.textSecondaryLight.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Authorized Signature',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      color: AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
 
-          // Action buttons
+          const SizedBox(height: 32),
+
+          // Actions
           Row(
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    if (transaction.status.toLowerCase() != 'success' &&
-                        transaction.status.toLowerCase() != 'paid') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Receipt sharing is only available for approved transactions.',
-                          ),
-                          backgroundColor: AppColors.warning,
-                        ),
-                      );
-                      return;
-                    }
-                    // Close the modal bottom sheet first
-                    Navigator.of(context).pop();
-                    // Navigate to receipt preview screen (which will also have similar checks, or we can just share directly)
-                    context.push(
-                      '/receipt-preview',
-                      extra: {
-                        'transactionId': transaction.id,
-                        'amount': transaction.amount,
-                        'dateTime': transaction.date,
-                        'paymentMethod': transaction.paymentMethod,
-                        'status': transaction.status,
-                        'referenceId': 'REF1234567890',
-                        'studentName': 'John Doe',
-                        'hostelBlock': 'A',
-                        'roomNumber': '101',
-                        'messType': 'Vegetarian',
-                      },
-                    );
-                  },
+                  onTap: _isDownloading ? null : _handleDownload,
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: NeumorphicStyle.cardDecoration(
@@ -870,77 +967,25 @@ class ReceiptModal extends StatelessWidget {
                       borderRadius: 20,
                     ),
                     child: Center(
-                      child: Text(
-                        'Share',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color:
-                              (transaction.status.toLowerCase() == 'success' ||
-                                  transaction.status.toLowerCase() == 'paid')
-                              ? AppColors.textPrimary(context)
-                              : AppColors.textSecondaryLight.withOpacity(0.5),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    if (transaction.status.toLowerCase() != 'success' &&
-                        transaction.status.toLowerCase() != 'paid') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Receipt download is only available for approved transactions.',
-                          ),
-                          backgroundColor: AppColors.warning,
-                        ),
-                      );
-                      return;
-                    }
-                    // Close the modal bottom sheet first
-                    Navigator.of(context).pop();
-                    // Navigate to receipt preview screen
-                    context.push(
-                      '/receipt-preview',
-                      extra: {
-                        'transactionId': transaction.id,
-                        'amount': transaction.amount,
-                        'dateTime': transaction.date,
-                        'paymentMethod': transaction.paymentMethod,
-                        'status': transaction.status,
-                        'referenceId': 'REF1234567890',
-                        'studentName': 'John Doe',
-                        'hostelBlock': 'A',
-                        'roomNumber': '101',
-                        'messType': 'Vegetarian',
-                      },
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: NeumorphicStyle.buttonDecoration(
-                      context,
-                      borderRadius: 20,
-                      color:
-                          (transaction.status.toLowerCase() == 'success' ||
-                              transaction.status.toLowerCase() == 'paid')
-                          ? AppColors.primary
-                          : AppColors.textSecondaryLight.withOpacity(0.3),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Download PDF',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                      ),
+                      child: _isDownloading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.primary,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Download PDF',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textPrimary(context),
+                              ),
+                            ),
                     ),
                   ),
                 ),
@@ -962,6 +1007,8 @@ class ReceiptModal extends StatelessWidget {
     if (isStatus) {
       switch (value) {
         case 'Success':
+        case 'Completed':
+        case 'Approved':
           valueColor = AppColors.success;
           break;
         case 'Pending':

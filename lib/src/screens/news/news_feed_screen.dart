@@ -69,11 +69,11 @@ class _NewsFeedViewState extends State<_NewsFeedView>
                   Icons.notifications_outlined,
                   color: Colors.white,
                 ),
-                onPressed: () {},
+                onPressed: () => context.push('/notifications'),
               ),
               IconButton(
                 icon: const Icon(Icons.person_outline, color: Colors.white),
-                onPressed: () {},
+                onPressed: () => context.push('/profile'),
               ),
             ],
           ),
@@ -90,10 +90,7 @@ class _NewsFeedViewState extends State<_NewsFeedView>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Lottie.asset(
-                          'assets/lottie/no_connection.json',
-                          height: 180,
-                        ),
+                        Lottie.asset('assets/lottie/no news.json', height: 180),
                         const SizedBox(height: 24),
                         Text(
                           'Oops! Something went wrong',

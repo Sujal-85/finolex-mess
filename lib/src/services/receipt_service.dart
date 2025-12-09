@@ -1,208 +1,256 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../models/receipt_model.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../models/transaction.dart';
+import 'package:intl/intl.dart';
 
-class ReceiptService extends ChangeNotifier {
-  List<Receipt> _receipts = [];
-  List<Receipt> _filteredReceipts = [];
-  Set<String> _selectedReceiptIds = {};
-  String _searchQuery = '';
-  String _selectedFilter = 'All';
+class ReceiptService {
+  Future<void> generateAndDownloadReceipt(
+    Transaction transaction,
+    Map<String, dynamic> user,
+  ) async {
+    final pdf = pw.Document();
 
-  List<Receipt> get receipts => _filteredReceipts;
-  Set<String> get selectedReceiptIds => _selectedReceiptIds;
-  bool get hasSelectedReceipts => _selectedReceiptIds.isNotEmpty;
-  int get selectedCount => _selectedReceiptIds.length;
-  String get selectedFilter => _selectedFilter;
+    // Load assets
+    final logoImage = await rootBundle.load('assets/images/logo-circle.png');
+    final signatureImage = await rootBundle.load(
+      'assets/images/manager_signature.png',
+    );
 
-  ReceiptService() {
-    _loadSampleReceipts();
-    _applyFilters();
-  }
+    final logo = pw.MemoryImage(logoImage.buffer.asUint8List());
+    final signature = pw.MemoryImage(signatureImage.buffer.asUint8List());
 
-  void _loadSampleReceipts() {
-    _receipts = [];
-  }
+    final font = await PdfGoogleFonts.poppinsRegular();
+    final fontBold = await PdfGoogleFonts.poppinsBold();
 
-  void setSearchQuery(String query) {
-    _searchQuery = query;
-    _applyFilters();
-  }
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return [
+            // Header
+            pw.Center(
+              child: pw.Column(
+                children: [
+                  pw.Image(logo, width: 80, height: 80),
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Prasanna Caterers',
+                    style: pw.TextStyle(font: fontBold, fontSize: 24),
+                  ),
+                  pw.Text(
+                    'Finolex Academy of Management and Technology',
+                    style: pw.TextStyle(
+                      font: font,
+                      fontSize: 12,
+                      color: PdfColors.grey700,
+                    ),
+                  ),
+                  pw.SizedBox(height: 20),
+                  pw.Divider(),
+                ],
+              ),
+            ),
 
-  void setSelectedFilter(String filter) {
-    _selectedFilter = filter;
-    _applyFilters();
-  }
+            pw.SizedBox(height: 20),
 
-  void _applyFilters() {
-    _filteredReceipts = _receipts.where((receipt) {
-      // Apply search filter
-      bool matchesSearch =
-          _searchQuery.isEmpty ||
-          receipt.transactionId.toLowerCase().contains(
-            _searchQuery.toLowerCase(),
-          ) ||
-          receipt.amount.toString().contains(_searchQuery) ||
-          receipt.dateTime.toString().contains(_searchQuery);
+            // Title
+            pw.Center(
+              child: pw.Text(
+                'PAYMENT RECEIPT',
+                style: pw.TextStyle(
+                  font: fontBold,
+                  fontSize: 20,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
 
-      // Apply category filter
-      bool matchesFilter =
-          _selectedFilter == 'All' ||
-          (_selectedFilter == 'This Month' &&
-              receipt.dateTime.isAfter(
-                DateTime.now().subtract(const Duration(days: 30)),
-              )) ||
-          (_selectedFilter == 'Last Month' &&
-              receipt.dateTime.isAfter(
-                DateTime.now().subtract(const Duration(days: 60)),
-              ) &&
-              receipt.dateTime.isBefore(
-                DateTime.now().subtract(const Duration(days: 30)),
-              )) ||
-          receipt.paymentMethod == _selectedFilter ||
-          receipt.status == _selectedFilter;
+            pw.SizedBox(height: 30),
 
-      return matchesSearch && matchesFilter;
-    }).toList();
+            // Student Details
+            pw.Container(
+              padding: const pw.EdgeInsets.all(15),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(10),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Student Details',
+                    style: pw.TextStyle(font: fontBold, fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 10),
+                  _buildInfoRow('Name', user['name'] ?? 'N/A', font, fontBold),
+                  _buildInfoRow(
+                    'Email',
+                    user['email'] ?? 'N/A',
+                    font,
+                    fontBold,
+                  ),
+                  _buildInfoRow(
+                    'Room No',
+                    user['hostelDetails']?['roomNo'] ?? 'N/A',
+                    font,
+                    fontBold,
+                  ),
+                  _buildInfoRow(
+                    'Hostel',
+                    user['hostelDetails']?['hostelName'] ?? 'N/A',
+                    font,
+                    fontBold,
+                  ),
+                ],
+              ),
+            ),
 
-    notifyListeners();
-  }
+            pw.SizedBox(height: 20),
 
-  void toggleReceiptSelection(String id) {
-    if (_selectedReceiptIds.contains(id)) {
-      _selectedReceiptIds.remove(id);
-    } else {
-      _selectedReceiptIds.add(id);
-    }
-    notifyListeners();
-  }
-
-  void selectAllReceipts() {
-    _selectedReceiptIds = _filteredReceipts
-        .map((receipt) => receipt.id)
-        .toSet();
-    notifyListeners();
-  }
-
-  void clearSelection() {
-    _selectedReceiptIds.clear();
-    notifyListeners();
-  }
-
-  List<Receipt> getSelectedReceipts() {
-    return _receipts
-        .where((receipt) => _selectedReceiptIds.contains(receipt.id))
-        .toList();
-  }
-
-  Future<void> downloadReceipt(String id) async {
-    final receipt = _receipts.firstWhere((r) => r.id == id);
-    await _generateAndDownloadPdf([receipt]);
-  }
-
-  Future<void> downloadSelectedReceipts() async {
-    final selectedReceipts = getSelectedReceipts();
-    if (selectedReceipts.isEmpty) return;
-    await _generateAndDownloadPdf(selectedReceipts);
-  }
-
-  Future<void> shareReceipt(String id) async {
-    final receipt = _receipts.firstWhere((r) => r.id == id);
-    await _generateAndDownloadPdf([receipt], isShare: true);
-  }
-
-  Future<void> shareSelectedReceipts() async {
-    final selectedReceipts = getSelectedReceipts();
-    if (selectedReceipts.isEmpty) return;
-    await _generateAndDownloadPdf(selectedReceipts, isShare: true);
-  }
-
-  Future<void> _generateAndDownloadPdf(
-    List<Receipt> receipts, {
-    bool isShare = false,
-  }) async {
-    final doc = pw.Document();
-
-    for (final receipt in receipts) {
-      doc.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Header(
-                  level: 0,
-                  child: pw.Row(
+            // Transaction Details
+            pw.Container(
+              padding: const pw.EdgeInsets.all(15),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(10),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Transaction Details',
+                    style: pw.TextStyle(font: fontBold, fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 10),
+                  _buildInfoRow(
+                    transaction.upiId != null ? 'UPI ID' : 'Transaction Ref',
+                    transaction.upiId ?? transaction.id,
+                    font,
+                    fontBold,
+                  ),
+                  _buildInfoRow(
+                    'Date',
+                    DateFormat('dd MMM yyyy').format(transaction.date),
+                    font,
+                    fontBold,
+                  ),
+                  _buildInfoRow(
+                    'Time',
+                    DateFormat('hh:mm a').format(transaction.date),
+                    font,
+                    fontBold,
+                  ),
+                  _buildInfoRow(
+                    'Payment Method',
+                    transaction.paymentMethod,
+                    font,
+                    fontBold,
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Divider(),
+                  pw.SizedBox(height: 10),
+                  pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
                       pw.Text(
-                        'FAMT Canteen',
-                        style: pw.TextStyle(
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
+                        'Amount Paid',
+                        style: pw.TextStyle(font: fontBold, fontSize: 16),
                       ),
                       pw.Text(
-                        'Payment Receipt',
-                        style: const pw.TextStyle(fontSize: 18),
+                        'INR ${transaction.amount.toStringAsFixed(2)}',
+                        style: pw.TextStyle(
+                          font: fontBold,
+                          fontSize: 18,
+                          color: PdfColors.green700,
+                        ),
                       ),
                     ],
                   ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 40),
+
+            // Signature Section (Moved from footer to avoid duplication on multi-page split)
+            pw.Column(
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.end,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.center,
+                      children: [
+                        pw.Image(signature, width: 100),
+                        pw.SizedBox(height: 5),
+                        pw.Container(
+                          width: 120,
+                          height: 1,
+                          color: PdfColors.black,
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Text(
+                          'Mr. Sandeep Tambe',
+                          style: pw.TextStyle(font: fontBold, fontSize: 14),
+                        ),
+                        pw.SizedBox(height: 5),
+                        pw.Text(
+                          'Manager Signature',
+                          style: pw.TextStyle(font: font, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                pw.SizedBox(height: 20),
-                pw.Divider(),
-                pw.SizedBox(height: 20),
-                _buildPdfRow('Transaction ID', receipt.transactionId),
-                _buildPdfRow('Date', receipt.dateTime.toString()),
-                _buildPdfRow(
-                  'Amount',
-                  'INR ${receipt.amount.toStringAsFixed(2)}',
-                ),
-                _buildPdfRow('Payment Method', receipt.paymentMethod),
-                _buildPdfRow('Status', receipt.status),
-                pw.SizedBox(height: 40),
-                pw.Divider(),
                 pw.SizedBox(height: 20),
                 pw.Center(
                   child: pw.Text(
-                    'Thank you for your business!',
+                    'Thank you for your payment!',
                     style: pw.TextStyle(
-                      fontSize: 14,
-                      fontStyle: pw.FontStyle.italic,
+                      font: font,
+                      fontSize: 10,
+                      color: PdfColors.grey600,
                     ),
                   ),
                 ),
               ],
-            );
-          },
-        ),
-      );
-    }
+            ),
+          ];
+        },
+      ),
+    );
 
-    if (isShare) {
-      await Printing.sharePdf(
-        bytes: await doc.save(),
-        filename: 'receipts.pdf',
-      );
-    } else {
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async => doc.save(),
-        name: 'FAMT_Receipts',
-      );
-    }
+    // Save and Share
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/receipt_${transaction.id}.pdf');
+    await file.writeAsBytes(await pdf.save());
+
+    await Share.shareXFiles([
+      XFile(file.path),
+    ], text: 'Payment Receipt - ${transaction.id}');
   }
 
-  pw.Widget _buildPdfRow(String label, String value) {
+  pw.Widget _buildInfoRow(
+    String label,
+    String value,
+    pw.Font font,
+    pw.Font fontBold,
+  ) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 4),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(label, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          pw.Text(value),
+          pw.Text(
+            label,
+            style: pw.TextStyle(font: font, color: PdfColors.grey700),
+          ),
+          pw.Text(value, style: pw.TextStyle(font: fontBold)),
         ],
       ),
     );

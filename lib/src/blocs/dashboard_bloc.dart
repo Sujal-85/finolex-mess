@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
@@ -129,9 +130,46 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         }
       }
 
+      double pendingAmount = 0.0;
+      double completedUnsyncedAmount = 0.0;
+
+      if (recentTransactions.isNotEmpty) {
+        // Calculate Pending (Only strictly Pending)
+        pendingAmount = recentTransactions
+            .where((t) => t['status'] == 'Pending')
+            .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
+
+        // Calculate Completed (Add to balance if not already synced which we assume here)
+        completedUnsyncedAmount = recentTransactions
+            .where((t) => t['status'] == 'Completed')
+            .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
+      }
+
+      // Adjust balance to include 'Completed' transactions which are legacy/unsynced
+      final adjustedBalance = balance + completedUnsyncedAmount;
+
+      // Check if total dues are cleared
+      // Assuming 3500 is the hardcoded total fee for now
+      if (adjustedBalance + pendingAmount >= 3500) {
+        final prefs = await SharedPreferences.getInstance();
+        final now = DateTime.now();
+        final currentMonthKey =
+            'payment_done_notified_${now.month}_${now.year}';
+
+        // Only show if not already shown this month
+        if (!prefs.containsKey(currentMonthKey)) {
+          _notificationService.showNotification(
+            id: 999, // Unique ID for Payment Complete
+            title: 'Mess Payment Done ✅',
+            body: 'Great! You have completed your mess payment.',
+          );
+          await prefs.setBool(currentMonthKey, true);
+        }
+      }
+
       emit(
         DashboardLoaded(
-          balance: balance,
+          balance: adjustedBalance,
           nextMeal: nextMealName,
           breakfastItem: breakfastItem,
           lunchItem: lunchItem,
@@ -144,6 +182,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           roomNumber: roomNumber,
           birthdays: birthdays,
           recentTransactions: recentTransactions,
+          pendingAmount: pendingAmount,
         ),
       );
     } catch (e) {
@@ -192,6 +231,25 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             title: newNotif['title'] ?? 'New Notification',
             body: newNotif['description'] ?? 'You have a new update.',
           );
+
+          // If payment related, refresh critical data immediately
+          if (newNotif['type'] == 'payment') {
+            final updatedUser = await _authService.refreshUser();
+            final newBalance = (updatedUser?['balance'] ?? 0).toDouble();
+
+            final paymentService = PaymentService();
+            final newTransactions = await paymentService
+                .fetchTransactionHistory(user['id']);
+
+            emit(
+              currentState.copyWith(
+                unreadNotifications: unreadCount,
+                balance: newBalance,
+                recentTransactions: newTransactions,
+              ),
+            );
+            return;
+          }
         }
       }
 

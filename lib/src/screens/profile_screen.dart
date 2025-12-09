@@ -7,6 +7,9 @@ import '../theme/neumorphism.dart';
 import '../widgets/animations/shimmer_effect.dart';
 import '../widgets/dialogs/plan_details_dialog.dart';
 import '../services/auth_service.dart';
+import '../services/cloudinary_service.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/payment_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -68,8 +71,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             currentBalance: (user['balance'] ?? 0).toDouble(),
             lastPayment: 0.00, // Placeholder - Not in schema
             lastPaymentDate: DateTime.now(), // Placeholder
+            pendingAmount: 0.0,
             profileImage: user['profileImage'],
           );
+
+          // Fetch transactions to calculate real-time pending amount
+          _fetchPendingAmount(user['id']);
           _isLoading = false;
         });
         _animationController.forward();
@@ -82,20 +89,182 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  Future<void> _fetchPendingAmount(String userId) async {
+    try {
+      final paymentService = PaymentService();
+      final transactions = await paymentService.fetchTransactionHistory(userId);
+      double pending = 0.0;
+      double completedUnsynced = 0.0;
+      double lastPaymentAmount = 0.0;
+      DateTime lastPaymentDate = DateTime.now();
+
+      // Sort transactions by date descending to find latest easily
+      transactions.sort((a, b) {
+        DateTime dateA = DateTime.parse(a['date']);
+        DateTime dateB = DateTime.parse(b['date']);
+        return dateB.compareTo(dateA);
+      });
+
+      bool lastPaymentFound = false;
+
+      for (var t in transactions) {
+        final status = t['status'];
+        final amount = (t['amount'] as num).toDouble();
+        final date = DateTime.parse(t['date']);
+
+        if (status == 'Pending') {
+          pending += amount;
+        } else if (status == 'Completed' ||
+            status == 'Success' ||
+            status == 'Approved') {
+          completedUnsynced += amount;
+
+          if (!lastPaymentFound) {
+            lastPaymentAmount = amount;
+            lastPaymentDate = date;
+            lastPaymentFound = true;
+          }
+        }
+      }
+
+      if (mounted && _userProfile != null) {
+        setState(() {
+          _userProfile = UserProfile(
+            name: _userProfile!.name,
+            collegeId: _userProfile!.collegeId,
+            hostelBlock: _userProfile!.hostelBlock,
+            roomNumber: _userProfile!.roomNumber,
+            email: _userProfile!.email,
+            phone: _userProfile!.phone,
+            gender: _userProfile!.gender,
+            messType: _userProfile!.messType,
+            membershipStatus: _userProfile!.membershipStatus,
+            currentBalance: _userProfile!.currentBalance + completedUnsynced,
+            lastPayment: lastPaymentAmount,
+            lastPaymentDate: lastPaymentDate,
+            pendingAmount: pending,
+            profileImage: _userProfile!.profileImage,
+          );
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching pending amount: $e');
+    }
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
     super.dispose();
   }
 
+  final CloudinaryService _cloudinaryService = CloudinaryService();
+  final ImagePicker _picker = ImagePicker();
+
   void _editPhoto() {
-    // In a real app, this would open image picker
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Edit photo functionality coming soon'),
-        backgroundColor: AppColors.primary,
+    _showImagePickerOptions();
+  }
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.camera_alt, color: AppColors.primary),
+                title: Text(
+                  'Take a Photo',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textPrimary(context),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleImageSelection(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_library, color: AppColors.primary),
+                title: Text(
+                  'Choose from Gallery',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.textPrimary(context),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _handleImageSelection(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  Future<void> _handleImageSelection(ImageSource source) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 75,
+      );
+
+      if (image != null) {
+        setState(() => _isLoading = true);
+
+        // Upload to Cloudinary
+        final String? imageUrl = await _cloudinaryService.uploadImage(image);
+
+        if (imageUrl != null) {
+          final user = await _authService.getUser();
+          if (user != null && user['id'] != null) {
+            // Update user profile with new image URL
+            final result = await _authService.updateProfile(user['id'], {
+              'profileImage': imageUrl,
+            });
+
+            if (result['success']) {
+              await _loadUser(); // Refresh UI
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Profile picture updated successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            } else {
+              throw Exception(result['message']);
+            }
+          }
+        } else {
+          throw Exception('Failed to upload image');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating profile picture: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   void _editProfile() {
@@ -182,40 +351,43 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                 // Scrollable content
                 Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 24),
+                  child: RefreshIndicator(
+                    onRefresh: _loadUser,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 24),
 
-                        // Information cards
-                        _buildInformationCards(),
+                          // Information cards
+                          _buildInformationCards(),
 
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                        // Quick actions row
-                        _buildQuickActions(),
+                          // Quick actions row
+                          _buildQuickActions(),
 
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                        // Settings section
-                        _buildSettingsSection(),
+                          // Settings section
+                          _buildSettingsSection(),
 
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                        Center(
-                          child: Text(
-                            'By Prasanna Caterers',
-                            style: GoogleFonts.playfairDisplay(
-                              fontSize: 16,
-                              fontStyle: FontStyle.italic,
-                              color: AppColors.textSecondaryLight,
+                          Center(
+                            child: Text(
+                              'By Prasanna Caterers',
+                              style: GoogleFonts.playfairDisplay(
+                                fontSize: 16,
+                                fontStyle: FontStyle.italic,
+                                color: AppColors.textSecondaryLight,
+                              ),
                             ),
                           ),
-                        ),
 
-                        const SizedBox(height: 24),
-                      ],
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -518,45 +690,76 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget _buildBalanceRow() {
     final double targetAmount = 3500;
     final double currentAmount = _userProfile?.currentBalance ?? 0;
-    final double progress = (currentAmount / targetAmount).clamp(0.0, 1.0);
+    final double pendingAmount = _userProfile?.pendingAmount ?? 0;
+
+    // Calculate Net Due
+    // Net Due = Total (3500) - (Approved + Pending)
+    double netDue = targetAmount - (currentAmount + pendingAmount);
+    if (netDue < 0) netDue = 0;
+
+    final double progress = ((currentAmount + pendingAmount) / targetAmount)
+        .clamp(0.0, 1.0);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Amount Paid (Mess Plan)',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: AppColors.textSecondaryLight,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Mess Plan Status',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: AppColors.textSecondaryLight,
+                ),
+              ),
+              if (pendingAmount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Pending: ₹${pendingAmount.toStringAsFixed(0)}',
+                    style: GoogleFonts.roboto(
+                      fontSize: 12,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              RichText(
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '₹${currentAmount.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Net Due',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppColors.textSecondaryLight,
                     ),
-                    TextSpan(
-                      text: ' / ₹${targetAmount.toStringAsFixed(0)}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondaryLight,
-                      ),
+                  ),
+                  Text(
+                    '₹${netDue.toStringAsFixed(0)}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: netDue > 0 ? AppColors.error : Colors.green,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
               GestureDetector(
                 onTap: _rechargeWallet,
@@ -592,6 +795,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                 progress >= 1.0 ? Colors.green : AppColors.primary,
               ),
               minHeight: 8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Paid: ₹${currentAmount.toStringAsFixed(0)} ${pendingAmount > 0 ? '(+ ₹${pendingAmount.toStringAsFixed(0)} pending)' : ''} / ₹${targetAmount.toStringAsFixed(0)}',
+            style: GoogleFonts.roboto(
+              fontSize: 12,
+              color: AppColors.textSecondaryLight,
             ),
           ),
         ],
@@ -774,13 +985,19 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildSettingItem(SettingItem setting) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: setting.onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Color(0xFFE0E0E0), width: 0.5),
+            bottom: BorderSide(
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : const Color(0xFFE0E0E0),
+              width: 0.5,
+            ),
           ),
         ),
         child: Row(
@@ -801,10 +1018,10 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ),
             if (setting.trailing != null) setting.trailing!,
-            const Icon(
+            Icon(
               Icons.arrow_forward_ios,
               size: 16,
-              color: Color(0xFFB0B0B0),
+              color: isDark ? const Color(0xFF666666) : const Color(0xFFB0B0B0),
             ),
           ],
         ),
@@ -1191,6 +1408,7 @@ class UserProfile {
   final double currentBalance;
   final double lastPayment;
   final DateTime lastPaymentDate;
+  final double pendingAmount;
   final String? profileImage;
 
   UserProfile({
@@ -1206,6 +1424,7 @@ class UserProfile {
     required this.currentBalance,
     required this.lastPayment,
     required this.lastPaymentDate,
+    this.pendingAmount = 0.0,
     this.profileImage,
   });
 }

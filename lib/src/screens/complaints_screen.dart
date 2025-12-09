@@ -359,7 +359,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
                     Container(
                       padding: const EdgeInsets.all(16),
                       child: Lottie.asset(
-                        'assets/lottie/onboarding_done.json',
+                        'assets/lottie/loading animation.json',
                         width: 50,
                         height: 30,
                       ),

@@ -112,13 +112,14 @@ router.post('/', async (req, res) => {
 // Update student profile
 router.put('/:id', async (req, res) => {
     try {
-        const { name, email, phone } = req.body;
+        const { name, email, phone, profileImage } = req.body;
         const student = await Student.findById(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
 
         if (name) student.name = name;
         if (email) student.email = email;
         if (phone) student.phone = phone;
+        if (profileImage) student.profileImage = profileImage;
 
         const updatedStudent = await student.save();
         res.json({

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 import '../../blocs/dashboard_bloc.dart';
 import '../../blocs/dashboard_event.dart';
 import '../../blocs/dashboard_state.dart';
@@ -16,6 +17,11 @@ import '../../widgets/dashboard/announcement_card.dart';
 import '../../widgets/dashboard/payment_due_card.dart';
 import '../../widgets/dashboard/birthday_card.dart';
 import '../../widgets/dashboard/food_quote_card.dart';
+import '../../widgets/receipt_card.dart';
+import '../../models/transaction.dart';
+import '../../services/receipt_service.dart';
+import '../../services/auth_service.dart';
+// For ReceiptModal
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,6 +35,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(DashboardLoadRequested());
+  }
+
+  Future<void> _downloadReceipt(Transaction transaction) async {
+    try {
+      final user = await AuthService().getUser();
+      if (user == null) return;
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Generating Receipt...')));
+      }
+
+      await ReceiptService().generateAndDownloadReceipt(transaction, user);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Receipt Downloaded!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error downloading receipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -95,192 +136,359 @@ class _DashboardScreenState extends State<DashboardScreen> {
               }
 
               if (state is DashboardError) {
-                return Center(child: Text('Error: ${state.message}'));
-              }
-
-              if (state is DashboardLoaded) {
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    context.read<DashboardBloc>().add(
-                      DashboardRefreshRequested(),
-                    );
-                  },
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 100),
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Header
-                        DashboardHeader(
-                          studentName: state.studentName,
-                          hostelBlock: state.hostelBlock,
-                          roomNumber: state.roomNumber,
-                          notificationCount: state.unreadNotifications,
-                          profileImage: state.profileImage,
-                          onNotificationTap: () =>
-                              context.push('/notifications'),
-                          onProfileTap: () => context.push('/profile'),
+                        Lottie.asset(
+                          'assets/lottie/Not found error.json',
+                          height: 200,
+                          fit: BoxFit.contain,
                         ),
-
-                        const SizedBox(height: 20),
-
-                        // Birthday Card or Quote Card
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: state.birthdays.isNotEmpty
-                              ? BirthdayCard(
-                                  studentName: state.birthdays.first['name'],
-                                  profileImage:
-                                      state.birthdays.first['profileImage'],
-                                )
-                              : const FoodQuoteCard(),
-                        ),
-                        const SizedBox(height: 20),
-
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Column(
-                            children: [
-                              // Payment Due
-                              PaymentDueCard(
-                                amount: 3500.00,
-                                dueDate: '5th Dec',
-                                onPayNow: () => context.push('/payment'),
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              context.read<DashboardBloc>().add(
+                                DashboardLoadRequested(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
                               ),
-
-                              const SizedBox(height: 24),
-
-                              // Next Meal Card
-                              _buildNextMealCard(state.nextMeal),
-
-                              const SizedBox(height: 24),
-
-                              // Menu Card
-                              MenuCard(
-                                onViewFullMenu: () => context.push('/menu'),
-                                breakfastItem: state.breakfastItem,
-                                lunchItem: state.lunchItem,
-                                dinnerItem: state.dinnerItem,
+                              elevation: 5,
+                            ),
+                            child: Text(
+                              'Retry Connection',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
                               ),
-
-                              const SizedBox(height: 24),
-
-                              // Quick Actions Header
-                              Text(
-                                'Quick Actions',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary(context),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-
-                              // Action Grid
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return GridView.count(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    crossAxisCount:
-                                        3, // Changed to 3 for better visibility
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                    childAspectRatio: 1.0,
-                                    children: [
-                                      _buildCompactAction(
-                                        'History',
-                                        Icons.restaurant_menu,
-                                        Colors.blue,
-                                        () => context.push('/history'),
-                                      ),
-                                      _buildCompactAction(
-                                        'Complaints',
-                                        Icons.report_problem_outlined,
-                                        Colors.orange,
-                                        () => context.push('/complaints'),
-                                      ),
-                                      _buildCompactAction(
-                                        'Support',
-                                        Icons.headset_mic_outlined,
-                                        Colors.green,
-                                        () => context.push('/emergency'),
-                                      ),
-                                      _buildCompactAction(
-                                        'Feedback',
-                                        Icons.star_outline,
-                                        Colors.amber,
-                                        () => context.push('/feedback'),
-                                      ),
-                                      _buildCompactAction(
-                                        'Rules',
-                                        Icons.gavel_outlined,
-                                        Colors.purple,
-                                        () => context.push(
-                                          '/about',
-                                        ), // Placeholder
-                                      ),
-                                      _buildCompactAction(
-                                        'Settings',
-                                        Icons.settings_outlined,
-                                        Colors.grey,
-                                        () => context.push('/settings'),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-
-                              const SizedBox(height: 24),
-
-                              // Recent Activity
-                              _buildRecentActivitySection(
-                                state.recentTransactions,
-                              ),
-
-                              const SizedBox(height: 24),
-
-                              // Announcements
-                              AnnouncementCard(
-                                announcement: state.latestAnnouncement,
-                                onTap: () => context.push('/news'),
-                              ),
-
-                              const SizedBox(height: 40),
-
-                              // Footer
-                              Center(
-                                child: Column(
-                                  children: [
-                                    Opacity(
-                                      opacity: 0.7,
-                                      child: Image.asset(
-                                        'assets/images/logo-circle.png',
-                                        height: 50,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      'By Prasanna Caterers',
-                                      style: GoogleFonts.playfairDisplay(
-                                        fontSize: 16,
-                                        fontStyle: FontStyle.italic,
-                                        color: AppColors.textSecondaryLight,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              const SizedBox(height: 40),
-                            ],
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
+                );
+              }
+
+              // Next Meal Card
+              if (state is DashboardLoaded) {
+                final double pendingAmount = state.pendingAmount;
+
+                // Calculate Fine
+                final now = DateTime.now();
+                int fine = 0;
+                if (now.day > 10) {
+                  fine = (now.day - 10) * 5;
+                }
+                double totalMessFee = 3500.0 + fine;
+                double currentBalance = (state.balance ?? 0).toDouble();
+                double outstanding =
+                    totalMessFee - currentBalance - pendingAmount;
+                if (outstanding < 0) outstanding = 0;
+
+                return Column(
+                  children: [
+                    // Fixed Header
+                    DashboardHeader(
+                      studentName: state.studentName,
+                      hostelBlock: state.hostelBlock,
+                      roomNumber: state.roomNumber,
+                      notificationCount: state.unreadNotifications,
+                      profileImage: state.profileImage,
+                      onNotificationTap: () => context.push('/notifications'),
+                      onProfileTap: () => context.push('/profile'),
+                    ),
+
+                    // Scrollable Content
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          context.read<DashboardBloc>().add(
+                            DashboardRefreshRequested(),
+                          );
+                        },
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 100),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 20),
+
+                              // Birthday Card or Quote Card
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: state.birthdays.isNotEmpty
+                                    ? BirthdayCard(
+                                        studentName:
+                                            state.birthdays.first['name'],
+                                        profileImage: state
+                                            .birthdays
+                                            .first['profileImage'],
+                                      )
+                                    : const FoodQuoteCard(),
+                              ),
+                              const SizedBox(height: 20),
+
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Column(
+                                  children: [
+                                    // Payment Due
+                                    Column(
+                                      children: [
+                                        PaymentDueCard(
+                                          amount: outstanding,
+                                          pendingAmount: pendingAmount,
+                                          dueDate:
+                                              '10th ${DateFormat('MMM').format(now)}',
+                                          fineAmount: fine,
+                                          onPayNow: () async {
+                                            await context.push('/payment');
+                                            if (context.mounted) {
+                                              context.read<DashboardBloc>().add(
+                                                DashboardRefreshRequested(),
+                                              );
+                                            }
+                                          },
+                                        ),
+                                        if (outstanding <= 0) ...[
+                                          Builder(
+                                            builder: (context) {
+                                              // Find latest full payment receipt
+                                              final fullPayments = state
+                                                  .recentTransactions
+                                                  .where((t) {
+                                                    final amount =
+                                                        (t['amount'] ?? 0)
+                                                            .toDouble();
+                                                    final status =
+                                                        t['status'] ??
+                                                        'Pending';
+                                                    return amount >= 3400 &&
+                                                        (status == 'Success' ||
+                                                            status ==
+                                                                'Completed' ||
+                                                            status ==
+                                                                'Approved');
+                                                  })
+                                                  .toList();
+
+                                              if (fullPayments.isEmpty) {
+                                                return const SizedBox.shrink();
+                                              }
+
+                                              // Sort by date desc just in case
+                                              fullPayments.sort((a, b) {
+                                                final dateA = DateTime.parse(
+                                                  a['date'],
+                                                );
+                                                final dateB = DateTime.parse(
+                                                  b['date'],
+                                                );
+                                                return dateB.compareTo(dateA);
+                                              });
+
+                                              final latest = fullPayments.first;
+                                              final transaction = Transaction(
+                                                id:
+                                                    latest['razorpayOrderId'] ??
+                                                    'Unknown',
+                                                amount: (latest['amount'] ?? 0)
+                                                    .toDouble(),
+                                                date: DateTime.parse(
+                                                  latest['date'],
+                                                ),
+                                                paymentMethod:
+                                                    latest['upiId'] != null
+                                                    ? 'UPI'
+                                                    : 'Online',
+                                                status:
+                                                    latest['status'] ??
+                                                    'Success',
+                                                upiId: latest['upiId'],
+                                              );
+
+                                              return Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 16,
+                                                ),
+                                                child: ReceiptCard(
+                                                  transaction: transaction,
+                                                  onDownload: () =>
+                                                      _downloadReceipt(
+                                                        transaction,
+                                                      ),
+                                                  onShare: () =>
+                                                      _downloadReceipt(
+                                                        transaction,
+                                                      ),
+                                                  onView: () {
+                                                    // Temporary: direct download or minimal preview
+                                                    // Ideally use ReceiptModal logic if available or just download
+                                                    _downloadReceipt(
+                                                      transaction,
+                                                    );
+                                                  },
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Next Meal Card
+                                    _buildNextMealCard(state.nextMeal),
+
+                                    const SizedBox(height: 24),
+
+                                    // Menu Card
+                                    MenuCard(
+                                      onViewFullMenu: () =>
+                                          context.push('/menu'),
+                                      breakfastItem: state.breakfastItem,
+                                      lunchItem: state.lunchItem,
+                                      dinnerItem: state.dinnerItem,
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Quick Actions Header
+                                    Text(
+                                      'Quick Actions',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary(context),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+
+                                    // Action Grid
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        return GridView.count(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          crossAxisCount:
+                                              3, // Changed to 3 for better visibility
+                                          crossAxisSpacing: 12,
+                                          mainAxisSpacing: 12,
+                                          childAspectRatio: 1.0,
+                                          children: [
+                                            _buildCompactAction(
+                                              'History',
+                                              Icons.restaurant_menu,
+                                              Colors.blue,
+                                              () => context.push('/history'),
+                                            ),
+                                            _buildCompactAction(
+                                              'Complaints',
+                                              Icons.report_problem_outlined,
+                                              Colors.orange,
+                                              () => context.push('/complaints'),
+                                            ),
+                                            _buildCompactAction(
+                                              'Support',
+                                              Icons.headset_mic_outlined,
+                                              Colors.green,
+                                              () => context.push('/emergency'),
+                                            ),
+                                            _buildCompactAction(
+                                              'Feedback',
+                                              Icons.star_outline,
+                                              Colors.amber,
+                                              () => context.push('/feedback'),
+                                            ),
+                                            _buildCompactAction(
+                                              'Rules',
+                                              Icons.gavel_outlined,
+                                              Colors.purple,
+                                              () => context.push(
+                                                '/about',
+                                              ), // Placeholder
+                                            ),
+                                            _buildCompactAction(
+                                              'Settings',
+                                              Icons.settings_outlined,
+                                              Colors.grey,
+                                              () => context.push('/settings'),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Recent Activity
+                                    _buildRecentActivitySection(
+                                      state.recentTransactions,
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Announcements
+                                    AnnouncementCard(
+                                      announcement: state.latestAnnouncement,
+                                      onTap: () => context.push('/news'),
+                                    ),
+
+                                    const SizedBox(height: 40),
+
+                                    // Footer
+                                    Center(
+                                      child: Column(
+                                        children: [
+                                          Opacity(
+                                            opacity: 0.7,
+                                            child: Image.asset(
+                                              'assets/images/logo-circle.png',
+                                              height: 50,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'By Prasanna Caterers',
+                                            style: GoogleFonts.playfairDisplay(
+                                              fontSize: 16,
+                                              fontStyle: FontStyle.italic,
+                                              color:
+                                                  AppColors.textSecondaryLight,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 40),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 );
               }
 
@@ -291,9 +499,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
 
       floatingActionButton: FloatingActionButton.large(
-        onPressed: () {
+        onPressed: () async {
           // Quick Pay
-          context.push('/payment');
+          await context.push('/payment');
+          if (context.mounted) {
+            context.read<DashboardBloc>().add(DashboardRefreshRequested());
+          }
         },
         backgroundColor: AppColors.primary,
         elevation: 10,
@@ -619,5 +830,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ],
     );
+  }
+
+  double _parseAmount(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is num) return val.toDouble();
+    if (val is String) {
+      if (val.isEmpty) return 0.0;
+      return double.tryParse(val) ?? 0.0;
+    }
+    return 0.0;
   }
 }
