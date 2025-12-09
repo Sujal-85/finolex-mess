@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
+import '../services/local_notification_service.dart';
 
 class NotificationService extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
@@ -9,22 +11,74 @@ class NotificationService extends ChangeNotifier {
   List<NotificationModel> get notifications => _notifications;
   NotificationType get selectedFilter => _selectedFilter;
 
+  Timer? _pollingTimer;
+  final LocalNotificationService _localNotificationService =
+      LocalNotificationService();
+
   NotificationService() {
     fetchNotifications();
+    _startPolling();
   }
 
-  Future<void> fetchNotifications() async {
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPolling() {
+    // Poll every 60 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
+      fetchNotifications(checkForNew: true);
+    });
+  }
+
+  Future<void> fetchNotifications({bool checkForNew = false}) async {
     try {
       final response = await ApiService().get('/notifications');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
-        _notifications = data
+        final newNotifications = data
             .map((json) => NotificationModel.fromJson(json))
             .toList();
+
+        if (checkForNew && _notifications.isNotEmpty) {
+          _checkForNewAndNotify(newNotifications);
+        }
+
+        _notifications = newNotifications;
         notifyListeners();
       }
     } catch (e) {
-      print('Error fetching notifications: $e');
+      debugPrint('Error fetching notifications: $e');
+    }
+  }
+
+  void _checkForNewAndNotify(List<NotificationModel> fetchedNotifications) {
+    if (_notifications.isEmpty) return;
+
+    final existingIds = _notifications.map((n) => n.id).toSet();
+
+    // Identify strictly new items (not just unread, but items we haven't seen before)
+    final newItems = fetchedNotifications
+        .where((n) => !existingIds.contains(n.id))
+        .toList();
+
+    for (var item in newItems) {
+      if (item.isNew || item.type == NotificationType.urgent) {
+        _localNotificationService.showNotification(
+          id: item.hashCode,
+          title: item.title,
+          body: item.description,
+        );
+      } else {
+        // Optional: Notify for all new items or just specific types
+         _localNotificationService.showNotification(
+          id: item.hashCode,
+          title: item.title,
+          body: item.description,
+        );
+      }
     }
   }
 

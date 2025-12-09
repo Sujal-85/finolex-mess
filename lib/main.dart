@@ -8,6 +8,8 @@ import 'src/services/notification_service.dart';
 import 'src/services/settings_service.dart';
 import 'src/services/receipt_service.dart';
 import 'src/services/local_notification_service.dart';
+import 'src/services/api_service.dart';
+import 'package:workmanager/workmanager.dart';
 
 import 'package:flutter/services.dart';
 
@@ -32,6 +34,20 @@ Future<void> _initNotifications() async {
   try {
     final notificationService = LocalNotificationService();
     await notificationService.init();
+
+    // Initialize WorkManager
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: false, // Set to true for testing
+    );
+
+    // Register Periodic Task
+    await Workmanager().registerPeriodicTask(
+      "1",
+      "fetchNotificationsTask",
+      frequency: const Duration(minutes: 15),
+      constraints: Constraints(networkType: NetworkType.connected),
+    );
 
     // Schedule Daily Meal Reminders
     await notificationService.scheduleDailyNotification(
@@ -60,6 +76,55 @@ Future<void> _initNotifications() async {
   } catch (e) {
     debugPrint('Error initializing notifications: $e');
   }
+}
+
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    try {
+      if (task == 'fetchNotificationsTask') {
+        // Initialize dependencies for background isolate
+        final notificationService = LocalNotificationService();
+        await notificationService.init();
+
+        // Fetch notifications
+        final response = await ApiService().get('/notifications');
+        if (response.statusCode == 200) {
+          // We need to check if there are any *new* ones.
+          // Since we can't easily access the previous state in background without
+          // shared prefs (which is async), we'll do a simple check.
+          // For now, let's just show a generic "Check for updates" or
+          // try to find the latest unsread.
+
+          // Refined Logic:
+          // Parse list, find any 'isUnread' or 'isNew'.
+          // If 'isNew' is true, show it.
+
+          final List<dynamic> data = response.data;
+          // Filter for urgent/new
+          final newItems = data
+              .where(
+                (item) => item['type'] == 'urgent' || item['isNew'] == true,
+              )
+              .toList();
+
+          if (newItems.isNotEmpty) {
+            final latest = newItems.first;
+            await notificationService.showNotification(
+              id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+              title: latest['title'] ?? 'New Notification',
+              body:
+                  latest['description'] ??
+                  'You have a new message from the canteen.',
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Background fetch error: $e');
+    }
+    return Future.value(true);
+  });
 }
 
 class MyApp extends StatelessWidget {

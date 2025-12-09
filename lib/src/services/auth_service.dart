@@ -26,9 +26,16 @@ class AuthService {
       }
       return false;
     } on DioException catch (e) {
-      throw Exception(
-        e.response?.data['message'] ?? e.message ?? 'Login failed',
-      );
+      String errorMessage = 'Login failed';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Login failed';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      throw Exception(errorMessage);
     } catch (e) {
       rethrow;
     }
@@ -40,17 +47,23 @@ class AuthService {
       if (response.statusCode == 201) {
         return {'success': true, 'studentId': response.data['studentId']};
       } else {
-        return {
-          'success': false,
-          'message': response.data['message'] ?? 'Registration failed',
-        };
+        String message = 'Registration failed';
+        if (response.data is Map) {
+          message = response.data['message']?.toString() ?? message;
+        }
+        return {'success': false, 'message': message};
       }
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message':
-            e.response?.data['message'] ?? e.message ?? 'Registration failed',
-      };
+      String errorMessage = 'Registration failed';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Registration failed';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -113,11 +126,16 @@ class AuthService {
       );
       return {'success': true, 'message': response.data['message']};
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message':
-            e.response?.data['message'] ?? e.message ?? 'Failed to send OTP',
-      };
+      String errorMessage = 'Failed to send OTP';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Failed to send OTP';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -131,11 +149,16 @@ class AuthService {
       );
       return {'success': true, 'message': response.data['message']};
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message':
-            e.response?.data['message'] ?? e.message ?? 'Verification failed',
-      };
+      String errorMessage = 'Verification failed';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Verification failed';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -149,11 +172,16 @@ class AuthService {
       );
       return {'success': true, 'message': response.data['message']};
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message':
-            e.response?.data['message'] ?? e.message ?? 'Failed to send OTP',
-      };
+      String errorMessage = 'Failed to send OTP';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Failed to send OTP';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -167,11 +195,16 @@ class AuthService {
       );
       return {'success': true, 'message': response.data['message']};
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message':
-            e.response?.data['message'] ?? e.message ?? 'Verification failed',
-      };
+      String errorMessage = 'Verification failed';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Verification failed';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -199,10 +232,16 @@ class AuthService {
       }
       return {'success': false, 'message': 'Failed to update profile'};
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message': e.response?.data['message'] ?? e.message ?? 'Update failed',
-      };
+      String errorMessage = 'Update failed';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Update failed';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
@@ -227,10 +266,16 @@ class AuthService {
       }
       return {'success': false, 'message': 'Failed to update password'};
     } on DioException catch (e) {
-      return {
-        'success': false,
-        'message': e.response?.data['message'] ?? e.message ?? 'Update failed',
-      };
+      String errorMessage = 'Update failed';
+      if (e.response?.data is Map) {
+        errorMessage =
+            e.response?.data['message']?.toString() ??
+            e.message ??
+            'Update failed';
+      } else if (e.message != null) {
+        errorMessage = e.message!;
+      }
+      return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }

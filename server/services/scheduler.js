@@ -2,9 +2,24 @@ const cron = require('node-cron');
 const Notification = require('../models/Notification');
 const Student = require('../models/Student');
 
+const axios = require('axios');
+
 const scheduler = {
     init: () => {
         console.log('Scheduler initialized...');
+
+        // Keep-Alive Ping (Every 10 minutes)
+        // Pings the public URL to prevent Render from sleeping
+        cron.schedule('*/10 * * * *', async () => {
+            console.log('Running Keep-Alive Ping');
+            try {
+                // Use the public Render URL
+                await axios.get('https://finolex-mess.onrender.com/ping');
+                console.log('Keep-Alive ping successful');
+            } catch (error) {
+                console.error('Keep-Alive ping failed:', error.message);
+            }
+        });
 
         // Morning Greeting (Every day at 8:00 AM IST)
         cron.schedule('0 8 * * *', async () => {
@@ -101,6 +116,22 @@ const scheduler = {
         }, {
             timezone: "Asia/Kolkata"
         });
+        // TEST JOB (Runs every minute)
+        // TODO: Remove this after verification
+        // cron.schedule('* * * * *', async () => {
+        //     console.log('Running Test Notification Job');
+        //     try {
+        //         const notification = new Notification({
+        //             title: 'Test Notification 🔔',
+        //             description: `This is a test notification generated at ${new Date().toLocaleTimeString()}`,
+        //             type: 'urgent' // Using 'urgent' to ensure it's picked up
+        //         });
+        //         await notification.save();
+        //         console.log('Test notification sent.');
+        //     } catch (error) {
+        //         console.error('Error sending test notification:', error);
+        //     }
+        // });
     }
 };
 

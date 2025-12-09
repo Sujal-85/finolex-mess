@@ -12,6 +12,7 @@ import '../widgets/animations/success_confetti.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
 import '../widgets/profile_style_header.dart';
+import '../services/local_notification_service.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
@@ -197,6 +198,18 @@ class _PaymentScreenState extends State<PaymentScreen>
         _showSuccess = true;
         _currentStep = 2; // Success
       });
+
+      // Show Payment Success Notification
+      try {
+        await LocalNotificationService().showNotification(
+          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          title: 'Payment Successful! ✅',
+          body:
+              'Your wallet has been topped up with ₹${_amount.toStringAsFixed(0)}',
+        );
+      } catch (e) {
+        debugPrint('Failed to show payment notification: $e');
+      }
 
       Future.delayed(const Duration(seconds: 4), () {
         if (mounted) {
