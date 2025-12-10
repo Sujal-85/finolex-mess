@@ -13,8 +13,13 @@ import 'package:workmanager/workmanager.dart';
 
 import 'package:flutter/services.dart';
 
-void main() {
+import 'package:firebase_core/firebase_core.dart';
+// import 'firebase_options.dart'; // Ensure this file exists, otherwise just default if checking platform
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

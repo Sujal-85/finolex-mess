@@ -94,15 +94,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 id: 11,
                 title: 'Lunch Time! 🍛',
                 body: 'Lunch is served! Today: ${state.lunchItem}',
-                hour: 13,
-                minute: 0,
+                hour: 12,
+                minute: 30,
               );
               notificationService.scheduleDailyNotification(
                 id: 12,
                 title: 'Dinner is Served! 🌙',
                 body: 'Dinner is ready! Today: ${state.dinnerItem}',
-                hour: 20,
-                minute: 0,
+                hour: 19,
+                minute: 30,
               );
 
               // Schedule Menu Update Notification
@@ -205,7 +205,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       roomNumber: state.roomNumber,
                       notificationCount: state.unreadNotifications,
                       profileImage: state.profileImage,
-                      onNotificationTap: () => context.push('/notifications'),
+                      onNotificationTap: () async {
+                        await context.push('/notifications');
+                        if (context.mounted) {
+                          context.read<DashboardBloc>().add(
+                            DashboardNotificationCheck(),
+                          );
+                        }
+                      },
                       onProfileTap: () => context.push('/profile'),
                     ),
 

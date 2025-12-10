@@ -1,130 +1,110 @@
 const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
-const axios = require('axios');
+const OTP = require('../models/OTP');
+require('dotenv').config();
 
-// In-memory OTP store (Use Redis/DB in production)
-const otpStore = new Map();
-
-// Email Transporter
+// Transporter Configuration
+// Using generic SMTP transport which works better across different providers including Gmail
 const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // true for 465, false for other ports
-    requireTLS: true,
+    service: 'gmail', // Built-in service for Gmail
     auth: {
-        user: 'khedekarsujay720@gmail.com',
-        pass: 'hmil kblm wgaq cbqd'
-    },
-    tls: {
-        rejectUnauthorized: false
-    },
-    connectionTimeout: 10000, // 10 seconds
-    logger: true,
-    debug: true
-});
-
-// Verify connection configuration
-transporter.verify(function (error, success) {
-    if (error) {
-        console.log('Transporter Error:', error);
-    } else {
-        console.log("Server is ready to take our messages");
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     }
 });
 
-// Fast2SMS Configuration
-const FAST2SMS_API_KEY = 'qfW9n2aU8fqaMqgs7c0YBcPLWtqjITgRJ2dwVdBQBoEOLykz3jf9zGAQFDWX';
-
-// Generate 6-digit OTP
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+// Verify Transporter Connection
+transporter.verify(function (error, success) {
+    if (error) {
+        console.log('SMTP Connection Error:', error);
+    } else {
+        console.log('SMTP Server is ready to take our messages');
+    }
+});
 
 // Send Email OTP
-router.post('/email/send', async (req, res) => {
+router.post('/send-email-otp', async (req, res) => {
     try {
         const { email } = req.body;
         if (!email) return res.status(400).json({ message: 'Email is required' });
 
-        const otp = generateOTP();
-        otpStore.set(email, { otp, expires: Date.now() + 10 * 60 * 1000 }); // 10 mins
+        // Generate 6 digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-        await transporter.sendMail({
-            from: 'Finolex Canteen <khedekarsujay720@gmail.com>',
+        // Save to DB (Delete existing OTPs for this email first)
+        await OTP.deleteMany({ email });
+        const newOTP = new OTP({ email, otp });
+        await newOTP.save();
+
+        console.log(`Sending OTP ${otp} to ${email}`);
+
+        // Mail Options
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
             to: email,
-            subject: 'Email Verification OTP',
-            text: `Your OTP for Finolex Canteen registration is: ${otp}. It expires in 10 minutes.`
-        });
+            subject: 'Finolex Canteen - Email Verification',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2 style="color: #2c3e50;">Email Verification</h2>
+                    <p>Your verification code is:</p>
+                    <h1 style="color: #3498db; letter-spacing: 5px; font-size: 32px;">${otp}</h1>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>If you didn't request this, please ignore this email.</p>
+                </div>
+            `
+        };
 
-        res.json({ success: true, message: 'OTP sent to email' });
-    } catch (error) {
-        console.error('Email OTP Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to send OTP. Please check email address or try again later.'
-        });
+        // Send Email
+        try {
+            await transporter.sendMail(mailOptions);
+            res.json({ success: true, message: 'OTP sent successfully' });
+        } catch (emailError) {
+            console.error('Email Send Error:', emailError);
+
+            // Fallback for Development/Testing if credentials fail
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('DEV MODE: Returning success despite email error. OTP was:', otp);
+                return res.json({
+                    success: true,
+                    message: 'DEV: OTP logged to console (Email failed)',
+                    devOtp: otp
+                });
+            }
+
+            res.status(500).json({
+                success: false,
+                message: 'Failed to send email. Check server logs.',
+                error: emailError.message
+            });
+        }
+
+    } catch (err) {
+        console.error('OTP Generation Error:', err);
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
 // Verify Email OTP
-router.post('/email/verify', (req, res) => {
-    const { email, otp } = req.body;
-    const storedData = otpStore.get(email);
-
-    if (!storedData) return res.status(400).json({ success: false, message: 'OTP not found or expired' });
-    if (Date.now() > storedData.expires) {
-        otpStore.delete(email);
-        return res.status(400).json({ success: false, message: 'OTP expired' });
-    }
-    if (storedData.otp !== otp) return res.status(400).json({ success: false, message: 'Invalid OTP' });
-
-    otpStore.delete(email);
-    res.json({ success: true, message: 'Email verified successfully' });
-});
-
-// Send Mobile OTP
-router.post('/mobile/send', async (req, res) => {
+router.post('/verify-email-otp', async (req, res) => {
     try {
-        const { phone } = req.body;
-        if (!phone) return res.status(400).json({ message: 'Phone number is required' });
+        const { email, otp } = req.body;
+        if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
 
-        const otp = generateOTP();
-        otpStore.set(phone, { otp, expires: Date.now() + 10 * 60 * 1000 });
+        const record = await OTP.findOne({ email, otp });
+        if (!record) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
+        }
 
-        await axios.get('https://www.fast2sms.com/dev/bulkV2', {
-            headers: {
-                authorization: FAST2SMS_API_KEY
-            },
-            params: {
-                variables_values: otp,
-                route: 'otp',
-                numbers: phone
-            }
-        });
+        // OTP Valid - Delete it
+        await OTP.deleteOne({ _id: record._id });
 
-        res.json({ success: true, message: 'OTP sent to mobile' });
-    } catch (error) {
-        console.error('Mobile OTP Error:', error.response?.data || error.message);
-        res.status(500).json({
-            success: false,
-            message: error.response?.data?.message || error.message || 'Failed to send OTP'
-        });
+        res.json({ success: true, message: 'Email verified successfully' });
+
+    } catch (err) {
+        console.error('OTP Verification Error:', err);
+        res.status(500).json({ success: false, message: err.message });
     }
-});
-
-// Verify Mobile OTP
-router.post('/mobile/verify', (req, res) => {
-    const { phone, otp } = req.body;
-    const storedData = otpStore.get(phone);
-
-    if (!storedData) return res.status(400).json({ success: false, message: 'OTP not found or expired' });
-    if (Date.now() > storedData.expires) {
-        otpStore.delete(phone);
-        return res.status(400).json({ success: false, message: 'OTP expired' });
-    }
-    if (storedData.otp !== otp) return res.status(400).json({ success: false, message: 'Invalid OTP' });
-
-    otpStore.delete(phone);
-    res.json({ success: true, message: 'Mobile verified successfully' });
 });
 
 module.exports = router;

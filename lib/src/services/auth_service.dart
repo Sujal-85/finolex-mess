@@ -2,11 +2,13 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthService {
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'auth_user';
   final ApiService _apiService = ApiService();
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   Future<bool> login(String email, String password) async {
     try {
@@ -117,26 +119,32 @@ class AuthService {
     return token != null;
   }
 
-  // Verification Methods
+  // Verification Methods - Backend OTP
   Future<Map<String, dynamic>> sendEmailOtp(String email) async {
     try {
       final response = await _apiService.post(
-        '/verify/email/send',
+        '/verify/send-email-otp',
         data: {'email': email},
       );
-      return {'success': true, 'message': response.data['message']};
-    } on DioException catch (e) {
-      String errorMessage = 'Failed to send OTP';
-      if (e.response?.data is Map) {
-        errorMessage =
-            e.response?.data['message']?.toString() ??
-            e.message ??
-            'Failed to send OTP';
-      } else if (e.message != null) {
-        errorMessage = e.message!;
+      if (response.statusCode == 200) {
+        // If in Dev mode, the backed might return the OTP in the message or generic success
+        return {
+          'success': true,
+          'message': response.data['message'] ?? 'OTP sent to $email',
+        };
       }
-      return {'success': false, 'message': errorMessage};
+      return {
+        'success': false,
+        'message': response.data['message'] ?? 'Failed to send OTP',
+      };
     } catch (e) {
+      if (e is DioException) {
+        return {
+          'success': false,
+          'message':
+              e.response?.data['message'] ?? e.message ?? 'Failed to send OTP',
+        };
+      }
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -144,67 +152,66 @@ class AuthService {
   Future<Map<String, dynamic>> verifyEmailOtp(String email, String otp) async {
     try {
       final response = await _apiService.post(
-        '/verify/email/verify',
+        '/verify/verify-email-otp',
         data: {'email': email, 'otp': otp},
       );
-      return {'success': true, 'message': response.data['message']};
-    } on DioException catch (e) {
-      String errorMessage = 'Verification failed';
-      if (e.response?.data is Map) {
-        errorMessage =
-            e.response?.data['message']?.toString() ??
-            e.message ??
-            'Verification failed';
-      } else if (e.message != null) {
-        errorMessage = e.message!;
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': 'Email verified successfully'};
       }
-      return {'success': false, 'message': errorMessage};
+      return {
+        'success': false,
+        'message': response.data['message'] ?? 'Invalid OTP',
+      };
     } catch (e) {
+      if (e is DioException) {
+        return {
+          'success': false,
+          'message':
+              e.response?.data['message'] ?? e.message ?? 'Verification failed',
+        };
+      }
       return {'success': false, 'message': e.toString()};
     }
   }
 
   Future<Map<String, dynamic>> sendMobileOtp(String phone) async {
-    try {
-      final response = await _apiService.post(
-        '/verify/mobile/send',
-        data: {'phone': phone},
-      );
-      return {'success': true, 'message': response.data['message']};
-    } on DioException catch (e) {
-      String errorMessage = 'Failed to send OTP';
-      if (e.response?.data is Map) {
-        errorMessage =
-            e.response?.data['message']?.toString() ??
-            e.message ??
-            'Failed to send OTP';
-      } else if (e.message != null) {
-        errorMessage = e.message!;
-      }
-      return {'success': false, 'message': errorMessage};
-    } catch (e) {
-      return {'success': false, 'message': e.toString()};
-    }
+    // This requires a callback setup, usually handled in UI (verifyPhoneNumber).
+    // We will return success here and let UI handle the trigger via a different method if needed,
+    // OR we expose a method that returns the verificationId.
+    // Since this method signature returns Map, we can't easily adhere to the previous API.
+    // I will add a NEW method for UI to call directly for Phone Auth.
+    return {'success': true, 'message': 'Please use verifyPhoneNumber in UI'};
   }
 
-  Future<Map<String, dynamic>> verifyMobileOtp(String phone, String otp) async {
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required Function(String, int?) codeSent,
+    required Function(FirebaseAuthException) verificationFailed,
+    required Function(PhoneAuthCredential) verificationCompleted,
+    required Function(String) codeAutoRetrievalTimeout,
+  }) async {
+    await _firebaseAuth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: verificationCompleted,
+      verificationFailed: verificationFailed,
+      codeSent: codeSent,
+      codeAutoRetrievalTimeout: codeAutoRetrievalTimeout,
+    );
+  }
+
+  Future<Map<String, dynamic>> verifyMobileOtp(
+    String verificationId,
+    String otp,
+  ) async {
     try {
-      final response = await _apiService.post(
-        '/verify/mobile/verify',
-        data: {'phone': phone, 'otp': otp},
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: otp,
       );
-      return {'success': true, 'message': response.data['message']};
-    } on DioException catch (e) {
-      String errorMessage = 'Verification failed';
-      if (e.response?.data is Map) {
-        errorMessage =
-            e.response?.data['message']?.toString() ??
-            e.message ??
-            'Verification failed';
-      } else if (e.message != null) {
-        errorMessage = e.message!;
-      }
-      return {'success': false, 'message': errorMessage};
+      await _firebaseAuth.signInWithCredential(credential);
+      return {'success': true, 'message': 'Phone verified successfully'};
+    } on FirebaseAuthException catch (e) {
+      return {'success': false, 'message': e.message ?? 'Invalid OTP'};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
     }

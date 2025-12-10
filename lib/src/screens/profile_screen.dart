@@ -60,16 +60,16 @@ class _ProfileScreenState extends State<ProfileScreen>
         setState(() {
           _userProfile = UserProfile(
             name: user['name'] ?? 'Student',
-            collegeId: user['rollNo'] ?? 'N/A',
+            collegeId: '', // Removed Roll No fetching
             hostelBlock: user['hostelDetails']?['hostelName'] ?? 'Not Assigned',
             roomNumber: user['hostelDetails']?['roomNo'] ?? 'N/A',
             email: user['email'] ?? '',
             phone: user['phone'] ?? '',
-            gender: 'Male', // Placeholder - Not in schema
-            messType: 'Vegetarian', // Placeholder - Not in schema
-            membershipStatus: 'Active', // Placeholder - Not in schema
+            dob: user['dob'] != null ? DateTime.parse(user['dob']) : null,
+            messType: 'Vegetarian', // Placeholder
+            membershipStatus: 'Active', // Placeholder
             currentBalance: (user['balance'] ?? 0).toDouble(),
-            lastPayment: 0.00, // Placeholder - Not in schema
+            lastPayment: 0.00, // Placeholder
             lastPaymentDate: DateTime.now(), // Placeholder
             pendingAmount: 0.0,
             profileImage: user['profileImage'],
@@ -136,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             roomNumber: _userProfile!.roomNumber,
             email: _userProfile!.email,
             phone: _userProfile!.phone,
-            gender: _userProfile!.gender,
+            dob: _userProfile!.dob,
             messType: _userProfile!.messType,
             membershipStatus: _userProfile!.membershipStatus,
             currentBalance: _userProfile!.currentBalance + completedUnsynced,
@@ -515,9 +515,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    _userProfile?.collegeId ?? '',
+                    _userProfile?.email ?? '',
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
+                      fontSize: 14,
                       color: Colors.white.withValues(alpha: 0.9),
                     ),
                   ),
@@ -559,7 +559,12 @@ class _ProfileScreenState extends State<ProfileScreen>
               _buildInfoRow('Full Name', _userProfile?.name ?? ''),
               _buildInfoRow('Email', _userProfile?.email ?? ''),
               _buildInfoRow('Phone Number', _userProfile?.phone ?? ''),
-              _buildInfoRow('Gender', _userProfile?.gender ?? ''),
+              _buildInfoRow(
+                'Date of Birth',
+                _userProfile?.dob != null
+                    ? '${_userProfile!.dob!.day.toString().padLeft(2, '0')}/${_userProfile!.dob!.month.toString().padLeft(2, '0')}/${_userProfile!.dob!.year}'
+                    : 'N/A',
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1402,7 +1407,7 @@ class UserProfile {
   final String roomNumber;
   final String email;
   final String phone;
-  final String gender;
+  final DateTime? dob;
   final String messType;
   final String membershipStatus;
   final double currentBalance;
@@ -1418,7 +1423,7 @@ class UserProfile {
     required this.roomNumber,
     required this.email,
     required this.phone,
-    required this.gender,
+    this.dob,
     required this.messType,
     required this.membershipStatus,
     required this.currentBalance,
