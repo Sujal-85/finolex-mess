@@ -173,7 +173,7 @@ class _SplashScreenState extends State<SplashScreen>
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              'Welcome to Prasanna Caterers',
+                              'Prasanna Caterers',
                               style: GoogleFonts.poppins(
                                 fontSize: 36,
                                 fontWeight: FontWeight.w700,
@@ -218,7 +218,7 @@ class _SplashScreenState extends State<SplashScreen>
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'by Prasanna Caterers',
+                          'Serving Efficiency. Delivering Trust.',
                           style: GoogleFonts.roboto(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,

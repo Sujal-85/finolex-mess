@@ -154,7 +154,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       // if (adjustedBalance + pendingAmount >= 3500) { ... }
 
       // Payment Fields extraction
-      final fineAmount = (user?['fineAmount'] ?? 0).toDouble();
+      // Frontend Logic: If user has paid 3500 (Base Fee), explicitly ignore backend fine.
+      // This ensures "All Paid" is shown correctly even if backend is slightly out of sync.
+      double fineAmount = (user?['fineAmount'] ?? 0).toDouble();
+      if (adjustedBalance >= 3500) {
+        fineAmount = 0.0;
+      }
       DateTime? paymentDueDate;
       if (user?['paymentDueDate'] != null) {
         paymentDueDate = DateTime.parse(user!['paymentDueDate']).toLocal();

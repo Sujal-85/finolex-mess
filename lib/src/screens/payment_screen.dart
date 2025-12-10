@@ -56,26 +56,40 @@ class _PaymentScreenState extends State<PaymentScreen>
   }
 
   Future<void> _fetchUser() async {
-    final user = await _authService.getUser();
+    // FORCE REFRESH: Use refreshUser() instead of getUser() to get latest backend data (and trigger read-repair)
+    final user = await _authService.refreshUser();
     if (user != null) {
       double balance = (user['balance'] ?? 0).toDouble();
 
-      // Similar to DashboardBloc/ProfileScreen, check for 'Completed' transactions
-      // and add them to the balance manually until backend syncs.
+      double pendingAmount = 0.0;
       try {
         final transactions = await _paymentService.fetchTransactionHistory(
           user['id'] ?? user['_id'],
         );
+        // Add locally completed (unsynced) balance
         final completedUnsynced = transactions
             .where((t) => t['status'] == 'Completed')
             .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
 
         balance += completedUnsynced;
+
+        // Calculate pending amount to deduct from due
+        pendingAmount = transactions
+            .where((t) => t['status'] == 'Pending')
+            .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
       } catch (e) {
         debugPrint('Error fetching transactions for balance check: $e');
       }
 
-      final double remaining = 3500.0 - balance;
+      final double fine = (user['fineAmount'] ?? 0).toDouble();
+      // Dashboard Logic: (3500 + Fine) - Balance - Pending
+      // Also apply the same "Ignore Fine if Paid Base" logic from Dashboard
+      double totalFee = 3500.0 + fine;
+      if (balance >= 3500.0) {
+        totalFee = 3500.0; // Ignore fine if base is covered
+      }
+
+      final double remaining = totalFee - balance - pendingAmount;
       final double initialAmount = remaining > 0 ? remaining : 0;
 
       setState(() {

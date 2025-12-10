@@ -165,13 +165,16 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                     const SizedBox(height: 20),
 
-                    Text(
-                      'Welcome Back!',
-                      style: GoogleFonts.poppins(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary(context),
-                        height: 1.2,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Welcome Back!',
+                        style: GoogleFonts.poppins(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary(context),
+                          height: 1.2,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),

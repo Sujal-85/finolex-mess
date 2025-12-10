@@ -80,9 +80,7 @@ router.put('/update-status', async (req, res) => {
 
                     if (remainingDues <= 0) {
                         student.paymentStatus = 'paid';
-                        student.fineAmount = 0; // Clear fines if fully paid? Or keep record? Usually clear or reset. 
-                        // Let's clear fine if paid logic implies 'settled'
-                        // student.fineAmount = 0; 
+                        student.fineAmount = 0; // Clear fines if fully paid 
 
                         title = 'Payment Done Thank You! 🎉';
                         description = 'Payment is done thank you. Your mess fees are fully paid.';

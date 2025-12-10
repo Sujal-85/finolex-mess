@@ -31,7 +31,7 @@ class _ComplaintHistoryScreenState extends State<ComplaintHistoryScreen> {
   Future<void> _fetchComplaints() async {
     try {
       final user = await _authService.getUser();
-      final studentId = user?['rollNo'];
+      final studentId = user?['id'];
 
       if (studentId == null) {
         setState(() {

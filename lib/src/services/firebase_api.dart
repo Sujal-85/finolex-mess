@@ -22,8 +22,12 @@ class FirebaseApi {
 
   final _localNotifications = FlutterLocalNotificationsPlugin();
 
-  Future<void> initNotifications() async {
+  Future<void> requestPermission() async {
     await _firebaseMessaging.requestPermission();
+  }
+
+  Future<void> initNotifications() async {
+    // await _firebaseMessaging.requestPermission(); // Removed to delay permission request
     final fCMToken = await _firebaseMessaging.getToken();
     print('Token: $fCMToken');
 

@@ -10,6 +10,7 @@ import '../../blocs/dashboard_state.dart';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
 import '../../services/local_notification_service.dart';
+import '../../services/firebase_api.dart';
 import '../../widgets/dashboard_header.dart';
 import '../../widgets/dashboard/menu_card.dart';
 
@@ -35,6 +36,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(DashboardLoadRequested());
+    // Request permissions after build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await LocalNotificationService().requestPermissions();
+      await FirebaseApi().requestPermission();
+    });
   }
 
   Future<void> _downloadReceipt(Transaction transaction) async {

@@ -52,6 +52,10 @@ class LocalNotificationService {
     );
 
     // Request permissions for Android 13+
+    // await requestPermissions(); // Removed to delay permission request
+  }
+
+  Future<void> requestPermissions() async {
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
           fln.AndroidFlutterLocalNotificationsPlugin
