@@ -131,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ScaleTransition(
                       scale: _scaleAnimation,
                       child: Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white,
@@ -139,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.05),
                               blurRadius: 20 + (10 * _glowAnimation.value),
-                              spreadRadius: 5 * _glowAnimation.value,
+                              spreadRadius: 2 * _glowAnimation.value,
                             ),
                             BoxShadow(
                               color: const Color(
@@ -153,69 +153,78 @@ class _SplashScreenState extends State<SplashScreen>
                         child: ClipOval(
                           child: Image.asset(
                             'assets/images/logo-removebg.png',
-                            width: 160,
-                            height: 160,
+                            width: 180,
+                            height: 180,
                             fit: BoxFit.contain,
                           ),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 60),
+                    const SizedBox(height: 40),
 
                     // App Name
                     FadeTransition(
                       opacity: _fadeAnimation,
                       child: SlideTransition(
                         position: _slideAnimation,
-                        child: Text(
-                          'FAMT Mess App',
-                          style: GoogleFonts.poppins(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(
-                              0xFF0A1D56,
-                            ), // Professional Deep Blue
-                            letterSpacing: 1.2,
-                            height: 1.2,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              'Welcome to Prasanna Caterers',
+                              style: GoogleFonts.poppins(
+                                fontSize: 36,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(
+                                  0xFF0A1D56,
+                                ), // Professional Deep Blue
+                                letterSpacing: 1.2,
+                                height: 1.2,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
 
                     const SizedBox(height: 16),
 
-                    // Tagline
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: SlideTransition(
-                        position: _slideAnimation,
-                        child: Text(
-                          'Meals — Managed Smartly',
-                          style: GoogleFonts.roboto(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.black54,
-                            letterSpacing: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
+                    // // Tagline
+                    // FadeTransition(
+                    //   opacity: _fadeAnimation,
+                    //   child: SlideTransition(
+                    //     position: _slideAnimation,
+                    //     child: Text(
+                    //       '',
+                    //       style: GoogleFonts.roboto(
+                    //         fontSize: 18,
+                    //         fontWeight: FontWeight.w400,
+                    //         color: Colors.black54,
+                    //         letterSpacing: 1.5,
+                    //       ),
+                    //       textAlign: TextAlign.center,
+                    //     ),
+                    //   ),
+                    // ),
 
-                    const SizedBox(height: 12),
+                    // const SizedBox(height: 12),
 
                     // Powered by
                     FadeTransition(
                       opacity: _fadeAnimation,
-                      child: Text(
-                        'by Prasanna Caterers',
-                        style: GoogleFonts.roboto(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[400],
-                          letterSpacing: 1.0,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'by Prasanna Caterers',
+                          style: GoogleFonts.roboto(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[400],
+                            letterSpacing: 1.0,
+                          ),
                         ),
                       ),
                     ),

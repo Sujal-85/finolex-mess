@@ -1,6 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // Removed foundation import
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
@@ -57,7 +56,15 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   // Services
   final AuthService _authService = AuthService();
 
+  // Password Strength
+  double _passwordStrength = 0;
+  String _passwordStrengthText = '';
+  Color _passwordStrengthColor = Colors.grey;
+
   Future<void> _submitForm() async {
+    // Explicitly dismiss keyboard
+    FocusScope.of(context).unfocus();
+
     if (!_formKeys[2]!.currentState!.validate()) return;
 
     // Final check logic
@@ -127,6 +134,22 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     }
 
     setState(() => _isSubmitting = true);
+
+    // DEV BYPASS: Allow 9876543210 to skip Firebase (useful if blocked)
+    if (phone == '9876543210') {
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network
+      setState(() {
+        _isPhoneVerified = true;
+        _isSubmitting = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Dev Mode Bypass: Verified!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      return;
+    }
 
     try {
       await _authService.verifyPhoneNumber(
@@ -583,7 +606,17 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
           _emailController,
           'Email Address',
           Icons.email_outlined,
-        ), // No Verification
+          validator: (value) {
+            if (value == null || value.isEmpty) return 'Email is required';
+            final emailRegex = RegExp(
+              r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
+            );
+            if (!emailRegex.hasMatch(value)) {
+              return 'Enter a valid email address';
+            }
+            return null;
+          },
+        ),
         const SizedBox(height: 16),
         // Date Picker
         InkWell(
@@ -841,11 +874,20 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            _buildCriteriaChip('Min 8 chars', _hasMinLength),
-            _buildCriteriaChip('Uppercase', _hasUppercase),
-            _buildCriteriaChip('Lowercase', _hasLowercase),
-            _buildCriteriaChip('Number', _hasDigits),
-            _buildCriteriaChip('Symbol', _hasSpecialChars),
+            _buildCriteriaChip('Min 8 characters are required', _hasMinLength),
+            _buildCriteriaChip(
+              'Atleast 1 Uppercase letter is required.',
+              _hasUppercase,
+            ),
+            _buildCriteriaChip(
+              'Atleast 1 Lowercase letter is required.',
+              _hasLowercase,
+            ),
+            _buildCriteriaChip('Atleast 1 Number is required.', _hasDigits),
+            _buildCriteriaChip(
+              'Atleast 1 Symbol is required.',
+              _hasSpecialChars,
+            ),
           ],
         ),
 

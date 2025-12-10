@@ -55,9 +55,13 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Future<void> _login() async {
+    // Explicitly dismiss keyboard to show loading/error states clearly
+    FocusScope.of(context).unfocus();
+
     HapticFeedback.mediumImpact();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    // ... rest of logic
 
     if (email.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Please enter Email and Password');
@@ -71,17 +75,16 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       final success = await _authService.login(email, password);
+      // ... same logic
       if (success) {
         setState(() {
           _showWelcome = true;
           _isLoading = false;
         });
-        // Wait for animation to play
-        await Future.delayed(
-          const Duration(seconds: 3),
-        ); // Adjust based on animation length
-        // Show Welcome Notification
+        await Future.delayed(const Duration(seconds: 3));
+
         try {
+          // ... notification
           await LocalNotificationService().showNotification(
             id: 1,
             title: 'Welcome to Prasanna Caterers! 👋',
@@ -147,13 +150,10 @@ class _LoginScreenState extends State<LoginScreen>
                     // Login Animation
                     Center(
                       child: Lottie.asset(
-                        'assets/lottie/welcome.json', // Placeholder for broken login_animation.lottie
+                        'assets/lottie/welcome.json',
                         height: 200,
                         repeat: true,
                         animate: true,
-                        onLoaded: (composition) {
-                          // Optional: Configure animation properties
-                        },
                         errorBuilder: (context, error, stackTrace) {
                           return const Icon(
                             Icons.error,
@@ -190,6 +190,7 @@ class _LoginScreenState extends State<LoginScreen>
                       hint: 'Email Address',
                       icon: Icons.email_outlined,
                       keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
                     ),
 
                     const SizedBox(height: 24),
@@ -200,6 +201,8 @@ class _LoginScreenState extends State<LoginScreen>
                       hint: 'Password',
                       icon: Icons.lock_outline,
                       obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _login(),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
@@ -295,9 +298,7 @@ class _LoginScreenState extends State<LoginScreen>
                     // Register Link
                     Center(
                       child: GestureDetector(
-                        onTap: () => context.push(
-                          '/register',
-                        ), // Assuming /register route exists
+                        onTap: () => context.push('/register'),
                         child: RichText(
                           text: TextSpan(
                             text: "Don't have an account? ",
@@ -353,6 +354,8 @@ class _LoginScreenState extends State<LoginScreen>
     TextInputType? keyboardType,
     bool obscureText = false,
     Widget? suffixIcon,
+    TextInputAction? textInputAction,
+    Function(String)? onSubmitted,
   }) {
     return Container(
       decoration: NeumorphicStyle.cardDecoration(
@@ -364,6 +367,8 @@ class _LoginScreenState extends State<LoginScreen>
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
         style: GoogleFonts.roboto(fontSize: 16),
         decoration: InputDecoration(
           hintText: hint,

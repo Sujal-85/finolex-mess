@@ -127,64 +127,68 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
     return Container(
       height: 60,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          final isSelected = notificationService.selectedFilter == category;
-
-          return GestureDetector(
-            onTap: () {
-              notificationService.selectFilter(category);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.primary
-                    : AppColors.surface(context),
-                borderRadius: BorderRadius.circular(20),
-                border: isSelected
-                    ? null
-                    : Border.all(
-                        color: AppColors.textSecondaryLight.withOpacity(0.3),
-                      ),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: categories.map((category) {
+            final isSelected = notificationService.selectedFilter == category;
+            return GestureDetector(
+              onTap: () {
+                notificationService.selectFilter(category);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.surface(context),
+                  borderRadius: BorderRadius.circular(20),
+                  border: isSelected
+                      ? null
+                      : Border.all(
+                          color: AppColors.textSecondaryLight.withOpacity(0.3),
                         ),
-                      ]
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(4, 4),
-                        ),
-                      ],
-              ),
-              child: Center(
-                child: Text(
-                  category.displayName,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: isSelected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                    color: isSelected
-                        ? Colors.white
-                        : AppColors.textPrimary(context),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(4, 4),
+                          ),
+                        ],
+                ),
+                child: Center(
+                  child: Text(
+                    category.displayName,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.textPrimary(context),
+                    ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          }).toList(),
+        ),
       ),
     );
   }
