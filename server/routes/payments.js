@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
 const Student = require('../models/Student');
+const Notification = require('../models/Notification');
 
 // Manual UPI Payment
 router.post('/manual-upi', async (req, res) => {
@@ -20,13 +21,11 @@ router.post('/manual-upi', async (req, res) => {
         await transaction.save();
 
         // Create Notification for Submission
-        const Notification = require('../models/Notification');
         const notification = new Notification({
             userId: studentId,
             title: 'Payment Submitted ⏳',
             description: `Your payment of ₹${amount} is pending approval.`,
-            type: 'payment',
-            isNew: true
+            type: 'payment'
         });
         await notification.save();
 

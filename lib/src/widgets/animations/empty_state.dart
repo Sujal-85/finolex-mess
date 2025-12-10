@@ -83,11 +83,18 @@ class _EmptyStateWidgetState extends State<EmptyStateWidget>
           ),
           if (widget.subMessage.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              widget.subMessage,
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondaryLight,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.subMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondaryLight,
+                  ),
+                ),
               ),
             ),
           ],

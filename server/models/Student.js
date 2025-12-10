@@ -18,8 +18,7 @@ const studentSchema = new mongoose.Schema({
     },
     isEmailVerified: { type: Boolean, default: false },
     isPhoneVerified: { type: Boolean, default: false },
-    isEmailVerified: { type: Boolean, default: false },
-    isPhoneVerified: { type: Boolean, default: false },
+
     fcmToken: { type: String }, // For push notifications
 
     // Payment & Fine Tracking

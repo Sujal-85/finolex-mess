@@ -81,9 +81,12 @@ router.post('/', async (req, res) => {
     try {
         let { name, email, password, phone, dob, profileImage, hostelDetails, isEmailVerified, isPhoneVerified } = req.body;
 
-        // Check if student exists
-        const existingStudent = await Student.findOne({ email });
-        if (existingStudent) return res.status(400).json({ message: 'Student already exists' });
+        // Check if student exists (Email OR Phone)
+        const existingStudent = await Student.findOne({ $or: [{ email }, { phone }] });
+        if (existingStudent) {
+            if (existingStudent.email === email) return res.status(400).json({ message: 'Email already exists' });
+            if (existingStudent.phone === phone) return res.status(400).json({ message: 'Phone number already exists' });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
