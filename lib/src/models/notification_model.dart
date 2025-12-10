@@ -27,14 +27,19 @@ class NotificationModel {
             json['createdAt'] ??
             DateTime.now().toIso8601String(),
       ),
-      type: NotificationType.values.firstWhere(
-        (e) => e.name == json['type'],
-        orElse: () => NotificationType.general,
-      ),
+      type: _parseNotificationType(json['type']),
       isUnread: json.containsKey('isUnread')
           ? (json['isUnread'] as bool? ?? true)
           : !(json['isRead'] as bool? ?? false),
       isNew: json['isNew'] as bool? ?? false,
+    );
+  }
+
+  static NotificationType _parseNotificationType(String? type) {
+    if (type == 'device_only') return NotificationType.deviceOnly;
+    return NotificationType.values.firstWhere(
+      (e) => e.name == type,
+      orElse: () => NotificationType.general,
     );
   }
 
@@ -51,7 +56,7 @@ class NotificationModel {
   }
 }
 
-enum NotificationType { mess, payment, news, urgent, general }
+enum NotificationType { mess, payment, news, urgent, general, deviceOnly }
 
 extension NotificationTypeExtension on NotificationType {
   String get iconName {
@@ -64,6 +69,8 @@ extension NotificationTypeExtension on NotificationType {
         return 'news_icon';
       case NotificationType.urgent:
         return 'alert_icon';
+      case NotificationType.deviceOnly:
+        return 'system_icon';
       default:
         return 'general_icon';
     }
@@ -79,6 +86,8 @@ extension NotificationTypeExtension on NotificationType {
         return 'News';
       case NotificationType.urgent:
         return 'Urgent';
+      case NotificationType.deviceOnly:
+        return 'System';
       default:
         return 'General';
     }

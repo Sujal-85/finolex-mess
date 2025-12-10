@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const MenuItem = require('../models/MenuItem');
 const Notification = require('../models/Notification');
+const Student = require('../models/Student');
+const admin = require('../services/firebase');
 
 // Get all menu items
 router.get('/', async (req, res) => {
@@ -35,6 +37,21 @@ router.post('/', async (req, res) => {
         });
         await notification.save();
 
+        // Send FCM Notification
+        const students = await Student.find({}).select('fcmToken');
+        const tokens = students.map(s => s.fcmToken).filter(t => t);
+
+        if (tokens.length > 0) {
+            const message = {
+                notification: {
+                    title: 'Menu Updated 🍽️',
+                    body: `${newItem.name} is now available!`
+                },
+                tokens: tokens
+            };
+            admin.messaging().sendEachForMulticast(message).catch(console.error);
+        }
+
         res.status(201).json(newItem);
     } catch (err) {
         res.status(400).json({ message: err.message });
@@ -54,6 +71,21 @@ router.patch('/:id', async (req, res) => {
             isNew: true
         });
         await notification.save();
+
+        // Send FCM Notification
+        const students = await Student.find({}).select('fcmToken');
+        const tokens = students.map(s => s.fcmToken).filter(t => t);
+
+        if (tokens.length > 0) {
+            const message = {
+                notification: {
+                    title: 'Menu Changed 🍽️',
+                    body: `${item.name} has been updated.`
+                },
+                tokens: tokens
+            };
+            admin.messaging().sendEachForMulticast(message).catch(console.error);
+        }
 
         res.json(item);
     } catch (err) {

@@ -75,47 +75,164 @@ const scheduler = {
             timezone: "Asia/Kolkata"
         });
 
-        // Payment Due Reminder (Every day at 9:00 AM IST)
-        cron.schedule('0 9 * * *', async () => {
-            console.log('Running Payment Reminder Job');
+        // 1. Pending Payment Reminder (TESTING: Every 1 Minute)
+        // Checks if student is pending/overdue 
+        const admin = require('./firebase');
+
+        // ... (existing code)
+
+        // 1. Pending Payment Reminder (Daily at 12:30 PM and 7:30 PM)
+        cron.schedule('30 12,19 * * *', async () => {
+            console.log('Running Payment Pending Reminder Job');
             try {
-                // Find students with dues > 0
-                // Note: Assuming 'dues' field exists in Student model. Adjust if necessary.
-                // For now, sending a generic reminder if we can't query specific users easily without more context.
-                // Or we can create individual notifications for users with dues.
-
-                // Example: Fetch all students with dues
-                /*
-                const studentsWithDues = await Student.find({ dues: { $gt: 0 } });
-                const notifications = studentsWithDues.map(student => ({
-                    userId: student._id,
-                    title: 'Payment Due',
-                    description: `You have outstanding dues of ₹${student.dues}. Please pay soon.`,
-                    type: 'payment'
-                }));
-                if (notifications.length > 0) {
-                    await Notification.insertMany(notifications);
+                // Check if date is 8th or later
+                const today = new Date();
+                if (today.getDate() < 8) {
+                    console.log('Skipping payment reminder (Before 8th).');
+                    return;
                 }
-                */
 
-                // Generic reminder for now as per "auto done all this things my own" request
-                // Ideally this should be targeted.
-                // Let's create a generic one for demonstration or targeted if we had the schema.
-                // Given the prompt "payment due remainder", I'll add a generic one for now.
+                // Find students pending/overdue
+                const students = await Student.find({
+                    paymentStatus: { $in: ['pending', 'overdue'] }
+                });
+                console.log(`[DEBUG] Found ${students.length} students for reminder.`);
+
+                if (students.length > 0) {
+                    // 1. Create Database Notifications (History)
+                    const notifications = students.map(student => ({
+                        userId: student._id,
+                        title: 'Payment Pending ⚠️',
+                        description: `Immediate Reminder: Your mess payment is pending. Please pay to avoid further fines.`,
+                        type: 'device_only'
+                    }));
+
+                    await Notification.insertMany(notifications);
+                    console.log('Payment pending reminders inserted (Device Only).');
+
+                    // 2. Send FCM Push Notifications
+                    const tokens = students
+                        .map(s => s.fcmToken)
+                        .filter(token => token && token.length > 0);
+
+                    console.log(`[DEBUG] Found ${tokens.length} valid FCM tokens.`);
+
+                    if (tokens.length > 0) {
+                        const message = {
+                            notification: {
+                                title: 'Payment Pending ⚠️',
+                                body: 'Immediate Reminder: Your mess payment is pending.'
+                            },
+                            tokens: tokens
+                        };
+
+                        try {
+                            const response = await admin.messaging().sendEachForMulticast(message);
+                            console.log(response.successCount + ' messages were sent successfully');
+                            if (response.failureCount > 0) {
+                                console.log(response.failureCount + ' messages failed.');
+                                response.responses.forEach((resp, idx) => {
+                                    if (!resp.success) {
+                                        console.log(`Token: ${tokens[idx]}, Error: ${resp.error}`);
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            console.log('Error sending FCM message:', error);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error sending payment pending reminder:', error);
+            }
+        }, { timezone: "Asia/Kolkata" });
+
+
+
+        // 2. Daily Fine Calculation (Every Midnight)
+        // If not paid by due date, add 5 rupees fine daily override
+        cron.schedule('0 0 * * *', async () => {
+            console.log('Running Daily Fine Calculation Job');
+            try {
+                const now = new Date();
+
+                // Find students who are overdue OR pending who have crossed the date
+                const overdueStudents = await Student.find({
+                    paymentStatus: { $in: ['pending', 'overdue'] },
+                    paymentDueDate: { $lt: now }
+                });
+
+                const fineNotifications = [];
+
+                for (const student of overdueStudents) {
+                    // Update Status
+                    student.paymentStatus = 'overdue';
+
+                    // Add Fine (5 Rs Daily)
+                    student.fineAmount = (student.fineAmount || 0) + 5;
+                    await student.save();
+
+                    // Prepare Notification
+                    fineNotifications.push({
+                        userId: student._id,
+                        title: 'Daily Fine Applied',
+                        description: `A fine of ₹5 has been applied. Total Fine: ₹${student.fineAmount}.`,
+                        type: 'urgent'
+                    });
+                }
+
+                if (fineNotifications.length > 0) {
+                    await Notification.insertMany(fineNotifications);
+                    console.log(`Applied fines and sent notifications to ${fineNotifications.length} students.`);
+                }
+
+            } catch (error) {
+                console.error('Error applying daily fines:', error);
+            }
+        }, { timezone: "Asia/Kolkata" });
+
+        // 3. Monthly Renewal (1st of Every Month)
+        // Renew payment submission logic
+        cron.schedule('0 0 1 * *', async () => {
+            console.log('Running Monthly Payment Renewal Job');
+            try {
+                const now = new Date();
+                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 10); // Due date 10th of next month? Or current?
+                // User said "Renew... from day of every month".
+                // Let's set Due Date to 10th of THIS new month.
+                const newDueDate = new Date(now.getFullYear(), now.getMonth(), 10);
+
+                // Update ALL students
+                // Note: We might want to keep 'overdue' status if they haven't paid previous? 
+                // Or just reset for the new cycle (Dues accumulate in balance/fine, but 'status' resets for the new bill)?
+                // User said "Renew the next month payment submission".
+                // I will Reset status to 'pending' (so they aren't 'overdue' for the NEW bill immediately)
+                // But their Balance should reflect previous dues (handled in Student Balance ideally).
+
+                await Student.updateMany({}, {
+                    $set: {
+                        paymentStatus: 'pending',
+                        paymentDueDate: newDueDate,
+                        // We don't reset fineAmount here likely, as they still owe it? 
+                        // Or maybe fine resets per month? Usually fines stick.
+                        // Keeping fineAmount.
+                        lastPaymentResetDate: now
+                    }
+                });
 
                 const notification = new Notification({
-                    title: 'Payment Reminder',
-                    description: 'Please check if you have any outstanding mess dues.',
-                    type: 'payment'
+                    title: 'New Month Started',
+                    description: 'Mess fees for this month are now generated. Please pay by the 10th.',
+                    type: 'mess'
                 });
                 await notification.save();
 
+                console.log('Monthly renewal complete.');
+
             } catch (error) {
-                console.error('Error sending payment reminder:', error);
+                console.error('Error in monthly renewal:', error);
             }
-        }, {
-            timezone: "Asia/Kolkata"
-        });
+        }, { timezone: "Asia/Kolkata" });
         // TEST JOB (Runs every minute)
         // TODO: Remove this after verification
         // cron.schedule('* * * * *', async () => {

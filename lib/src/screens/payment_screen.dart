@@ -203,9 +203,8 @@ class _PaymentScreenState extends State<PaymentScreen>
       try {
         await LocalNotificationService().showNotification(
           id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          title: 'Payment Successful! ✅',
-          body:
-              'Your wallet has been topped up with ₹${_amount.toStringAsFixed(0)}',
+          title: 'Payment Done',
+          body: 'Payment is done thank you',
         );
       } catch (e) {
         debugPrint('Failed to show payment notification: $e');

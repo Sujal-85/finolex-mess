@@ -5,9 +5,20 @@ const Notification = require('../models/Notification');
 // Get all notifications (sorted by newest first)
 router.get('/', async (req, res) => {
     try {
-        // In a real app, you would filter by req.user.id
-        // For now, returning all global notifications + user specific ones if we had auth middleware here
-        const notifications = await Notification.find().sort({ createdAt: -1 });
+        const { userId } = req.query;
+        let query = {};
+
+        if (userId) {
+            query = {
+                $or: [
+                    { userId: userId },
+                    { userId: null },
+                    { userId: { $exists: false } }
+                ]
+            };
+        }
+
+        const notifications = await Notification.find(query).sort({ createdAt: -1 });
         res.json(notifications);
     } catch (error) {
         res.status(500).json({ message: error.message });

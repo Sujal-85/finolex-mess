@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'src/services/firebase_api.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'src/blocs/dashboard_bloc.dart';
@@ -35,8 +36,11 @@ void main() async {
   runApp(const MyApp());
 }
 
+// Removed misplaced import
+
 Future<void> _initNotifications() async {
   try {
+    await FirebaseApi().initNotifications();
     final notificationService = LocalNotificationService();
     await notificationService.init();
 

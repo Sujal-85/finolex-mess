@@ -18,7 +18,17 @@ const studentSchema = new mongoose.Schema({
     },
     isEmailVerified: { type: Boolean, default: false },
     isPhoneVerified: { type: Boolean, default: false },
+    isEmailVerified: { type: Boolean, default: false },
+    isPhoneVerified: { type: Boolean, default: false },
     fcmToken: { type: String }, // For push notifications
+
+    // Payment & Fine Tracking
+    paymentStatus: { type: String, enum: ['paid', 'pending', 'overdue'], default: 'pending' },
+    paymentDueDate: { type: Date, default: () => new Date(new Date().getFullYear(), new Date().getMonth(), 10) }, // Default to 10th of current month
+    fineAmount: { type: Number, default: 0 },
+    monthlyFee: { type: Number, default: 3500 },
+    lastPaymentResetDate: { type: Date }, // To track when we last renewed the month
+
     createdAt: {
         type: Date,
         default: Date.now

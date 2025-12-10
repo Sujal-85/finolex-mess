@@ -150,21 +150,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
       // Check if total dues are cleared
       // Assuming 3500 is the hardcoded total fee for now
-      if (adjustedBalance + pendingAmount >= 3500) {
-        final prefs = await SharedPreferences.getInstance();
-        final now = DateTime.now();
-        final currentMonthKey =
-            'payment_done_notified_${now.month}_${now.year}';
+      // Calculation logic preserved, notification removed to avoid duplicates
+      // if (adjustedBalance + pendingAmount >= 3500) { ... }
 
-        // Only show if not already shown this month
-        if (!prefs.containsKey(currentMonthKey)) {
-          _notificationService.showNotification(
-            id: 999, // Unique ID for Payment Complete
-            title: 'Mess Payment Done ✅',
-            body: 'Great! You have completed your mess payment.',
-          );
-          await prefs.setBool(currentMonthKey, true);
-        }
+      // Payment Fields extraction
+      final fineAmount = (user?['fineAmount'] ?? 0).toDouble();
+      DateTime? paymentDueDate;
+      if (user?['paymentDueDate'] != null) {
+        paymentDueDate = DateTime.parse(user!['paymentDueDate']).toLocal();
       }
 
       emit(
@@ -183,6 +176,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           birthdays: birthdays,
           recentTransactions: recentTransactions,
           pendingAmount: pendingAmount,
+          fineAmount: fineAmount,
+          paymentDueDate: paymentDueDate,
         ),
       );
     } catch (e) {
@@ -216,12 +211,40 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
       final api = ApiService();
       final response = await api.get('/notifications?userId=${user!['id']}');
-      final notifications = List<Map<String, dynamic>>.from(response.data);
-      final unreadCount = notifications.where((n) => !n['isRead']).length;
+      final allNotifications = List<Map<String, dynamic>>.from(response.data);
 
-      // Check for new notifications to trigger local alert
+      // Handle Device Only Notifications (System Reminders)
+      final deviceOnlyNotifications = allNotifications
+          .where((n) => n['type'] == 'device_only' && !n['isRead'])
+          .toList();
+
+      if (deviceOnlyNotifications.isNotEmpty) {
+        for (var notif in deviceOnlyNotifications) {
+          _notificationService.showNotification(
+            id: DateTime.now().millisecond,
+            title: notif['title'] ?? 'Reminder',
+            body: notif['description'] ?? 'Check your payment status.',
+          );
+          // Mark as read immediately to prevent re-triggering
+          try {
+            await api.patch('/notifications/${notif['_id']}/read');
+          } catch (e) {
+            print('Error marking device notification read: $e');
+          }
+        }
+      }
+
+      // Filter visible notifications for App UI
+      final visibleNotifications = allNotifications
+          .where((n) => n['type'] != 'device_only')
+          .toList();
+      final unreadCount = visibleNotifications
+          .where((n) => !n['isRead'])
+          .length;
+
+      // Check for new visible notifications to trigger local alert for them too
       if (unreadCount > currentState.unreadNotifications) {
-        final newNotif = notifications.firstWhere(
+        final newNotif = visibleNotifications.firstWhere(
           (n) => !n['isRead'],
           orElse: () => {},
         );

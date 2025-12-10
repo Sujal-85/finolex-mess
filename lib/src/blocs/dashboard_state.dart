@@ -24,6 +24,10 @@ class DashboardLoaded extends DashboardState {
   final List<dynamic> recentTransactions;
   final double pendingAmount;
 
+  // New Payment Fields
+  final double fineAmount;
+  final DateTime? paymentDueDate;
+
   final String breakfastItem;
   final String lunchItem;
   final String dinnerItem;
@@ -43,6 +47,8 @@ class DashboardLoaded extends DashboardState {
     this.birthdays = const [],
     this.recentTransactions = const [],
     this.pendingAmount = 0.0,
+    this.fineAmount = 0.0,
+    this.paymentDueDate,
   });
 
   DashboardLoaded copyWith({
@@ -60,6 +66,8 @@ class DashboardLoaded extends DashboardState {
     List<Map<String, dynamic>>? birthdays,
     List<dynamic>? recentTransactions,
     double? pendingAmount,
+    double? fineAmount,
+    DateTime? paymentDueDate,
   }) {
     return DashboardLoaded(
       balance: balance ?? this.balance,
@@ -76,6 +84,8 @@ class DashboardLoaded extends DashboardState {
       birthdays: birthdays ?? this.birthdays,
       recentTransactions: recentTransactions ?? this.recentTransactions,
       pendingAmount: pendingAmount ?? this.pendingAmount,
+      fineAmount: fineAmount ?? this.fineAmount,
+      paymentDueDate: paymentDueDate ?? this.paymentDueDate,
     );
   }
 
@@ -95,6 +105,8 @@ class DashboardLoaded extends DashboardState {
     birthdays,
     recentTransactions,
     pendingAmount,
+    fineAmount,
+    paymentDueDate,
   ];
 }
 

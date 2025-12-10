@@ -1,11 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   late Dio _dio;
-  final String baseUrl = 'https://finolex-mess.onrender.com/api';
-  //final String baseUrl = 'http://192.168.217.157:4000/api'; 
+  // final String baseUrl = 'https://finolex-mess.onrender.com/api';
+  final String baseUrl = 'http://192.168.217.157:4000/api';
   // Use for Physical Device (LAN IP)
 
   factory ApiService() {
@@ -74,6 +75,26 @@ class ApiService {
   Future<Response> put(String path, {dynamic data}) async {
     try {
       return await _dio.put(path, data: data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<Response> updateFcmToken(String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userStr = prefs.getString('auth_user');
+      if (userStr != null) {
+        final user = jsonDecode(userStr);
+        final userId = user['id'] ?? user['_id'];
+        if (userId != null) {
+          return await _dio.put(
+            '/students/$userId/fcm-token',
+            data: {'fcmToken': token},
+          );
+        }
+      }
+      throw Exception('User ID not found');
     } catch (e) {
       rethrow;
     }

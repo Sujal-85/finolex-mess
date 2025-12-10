@@ -184,12 +184,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (state is DashboardLoaded) {
                 final double pendingAmount = state.pendingAmount;
 
-                // Calculate Fine
-                final now = DateTime.now();
-                int fine = 0;
-                if (now.day > 10) {
-                  fine = (now.day - 10) * 5;
-                }
+                // Use Backend Fine & Due Date
+                final double fine = state.fineAmount;
+                final DateTime now = DateTime.now();
+
+                // Show due date from backend or default to 10th
+                final dueDateDisplay = state.paymentDueDate != null
+                    ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
+                    : '10th ${DateFormat('MMM').format(now)}';
+
                 double totalMessFee = 3500.0 + fine;
                 double currentBalance = (state.balance ?? 0).toDouble();
                 double outstanding =
@@ -261,9 +264,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         PaymentDueCard(
                                           amount: outstanding,
                                           pendingAmount: pendingAmount,
-                                          dueDate:
-                                              '10th ${DateFormat('MMM').format(now)}',
-                                          fineAmount: fine,
+                                          dueDate: dueDateDisplay,
+                                          fineAmount: fine.toInt(),
                                           onPayNow: () async {
                                             await context.push('/payment');
                                             if (context.mounted) {
