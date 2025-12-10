@@ -5,8 +5,8 @@ import 'dart:convert';
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   late Dio _dio;
-  final String baseUrl = 'https://finolex-mess.onrender.com/api';
-  // final String baseUrl = 'http://192.168.217.157:4000/api';
+  // final String baseUrl = 'https://finolex-mess.onrender.com/api';
+  final String baseUrl = 'http://192.168.217.157:4000/api';
   // Use for Physical Device (LAN IP)
 
   factory ApiService() {

@@ -63,12 +63,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (mounted) {
           setState(() => _isLoading = false);
           if (result['success']) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(result['message']),
-                backgroundColor: Colors.green,
-              ),
-            );
+            // ScaffoldMessenger.of(context).showSnackBar(
+            //   SnackBar(
+            //     content: Text(result['message']),
+            //     backgroundColor: Colors.green,
+            //   ),
+            // );
             context.pop();
           } else {
             ScaffoldMessenger.of(context).showSnackBar(

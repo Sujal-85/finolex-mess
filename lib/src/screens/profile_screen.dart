@@ -236,12 +236,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             if (result['success']) {
               await _loadUser(); // Refresh UI
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Profile picture updated successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+                // ScaffoldMessenger.of(context).showSnackBar(
+                //   SnackBar(
+                //     content: Text('Profile picture updated successfully'),
+                //     backgroundColor: Colors.green,
+                //   ),
+                // );
               }
             } else {
               throw Exception(result['message']);

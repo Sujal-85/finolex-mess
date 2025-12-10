@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
@@ -35,7 +37,20 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> fetchNotifications({bool checkForNew = false}) async {
     try {
-      final response = await ApiService().get('/notifications');
+      // Get current user ID
+      final prefs = await SharedPreferences.getInstance();
+      final userStr = prefs.getString('auth_user');
+      String? userId;
+      if (userStr != null) {
+        final user = jsonDecode(userStr);
+        userId = user['id'] ?? user['_id'];
+      }
+
+      final response = await ApiService().get(
+        '/notifications',
+        queryParameters: userId != null ? {'userId': userId} : null,
+      );
+
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
         final newNotifications = data

@@ -17,6 +17,18 @@ router.post('/login', async (req, res) => {
         const isMatch = await bcrypt.compare(password, student.password);
         if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
+        // Auto-correct / Read-Repair Logic (Login)
+        // Check if balance covers base fee, if so clear fine.
+        const baseFee = student.monthlyFee || 3500;
+        const remainingBaseDues = baseFee - student.balance;
+
+        if (remainingBaseDues <= 0 && (student.paymentStatus !== 'paid' || student.fineAmount > 0)) {
+            student.paymentStatus = 'paid';
+            student.fineAmount = 0;
+            await student.save();
+            console.log(`[Login Read-Repair] Student ${student.name} marked as PAID.`);
+        }
+
         const token = jwt.sign({ id: student._id }, JWT_SECRET, { expiresIn: '1h' });
         res.json({
             token,
@@ -38,6 +50,20 @@ router.get('/:id', async (req, res) => {
     try {
         const student = await Student.findById(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
+
+        // Auto-correct / Read-Repair Logic
+        // If balance is sufficient to cover BASE fees, we assume they paid and clear fines.
+        // User Requirement: "fine will be add to the pending amt students only" (implies if base is paid, no fine)
+        const baseFee = student.monthlyFee || 3500;
+        const remainingBaseDues = baseFee - student.balance;
+
+        if (remainingBaseDues <= 0 && (student.paymentStatus !== 'paid' || student.fineAmount > 0)) {
+            student.paymentStatus = 'paid';
+            student.fineAmount = 0;
+            await student.save();
+            console.log(`[Read-Repair] Student ${student.name} marked as PAID (Base fee covered).`);
+        }
+
         res.json(student);
     } catch (err) {
         res.status(500).json({ message: err.message });

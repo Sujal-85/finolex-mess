@@ -165,6 +165,18 @@ const scheduler = {
                 const fineNotifications = [];
 
                 for (const student of overdueStudents) {
+                    // Check if they have actually paid (Balance >= Total Fee)
+                    const totalFee = (student.monthlyFee || 3500) + (student.fineAmount || 0);
+                    const remainingDues = totalFee - student.balance;
+
+                    if (remainingDues <= 0) {
+                        // Student has enough balance, mark as paid and skip fine
+                        student.paymentStatus = 'paid';
+                        await student.save();
+                        console.log(`Student ${student.name} marked as PAID (Balance sufficient). Skipping fine.`);
+                        continue;
+                    }
+
                     // Update Status
                     student.paymentStatus = 'overdue';
 
@@ -176,7 +188,7 @@ const scheduler = {
                     fineNotifications.push({
                         userId: student._id,
                         title: 'Daily Fine Applied',
-                        description: `A fine of ₹5 has been applied. Total Fine: ₹${student.fineAmount}.`,
+                        description: `A fine of ₹5 has been applied. Total Fine: ₹${student.fineAmount}. Due: ₹${Math.max(0, remainingDues + 5)}`, // remainingDues was before this 5rs, so +5
                         type: 'urgent'
                     });
                 }

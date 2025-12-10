@@ -13,6 +13,9 @@ import 'src/services/api_service.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:firebase_core/firebase_core.dart';
 // import 'firebase_options.dart'; // Ensure this file exists, otherwise just default if checking platform
@@ -96,44 +99,127 @@ void callbackDispatcher() {
         final notificationService = LocalNotificationService();
         await notificationService.init();
 
-        // Fetch notifications
-        final response = await ApiService().get('/notifications');
-        if (response.statusCode == 200) {
-          // We need to check if there are any *new* ones.
-          // Since we can't easily access the previous state in background without
-          // shared prefs (which is async), we'll do a simple check.
-          // For now, let's just show a generic "Check for updates" or
-          // try to find the latest unsread.
+        final prefs = await SharedPreferences.getInstance();
+        final userStr = prefs.getString('auth_user');
 
-          // Refined Logic:
-          // Parse list, find any 'isUnread' or 'isNew'.
-          // If 'isNew' is true, show it.
+        if (userStr != null) {
+          final user = jsonDecode(userStr);
+          final studentId = user['id'] ?? user['_id'];
 
-          final List<dynamic> data = response.data;
-          // Filter for urgent/new
-          final newItems = data
-              .where(
-                (item) => item['type'] == 'urgent' || item['isNew'] == true,
-              )
-              .toList();
+          if (studentId != null) {
+            // 1. Fetch Notifications (Existing Logic)
+            try {
+              final response = await ApiService().get('/notifications');
+              if (response.statusCode == 200) {
+                final List<dynamic> data = response.data;
+                final newItems = data
+                    .where(
+                      (item) =>
+                          item['type'] == 'urgent' || item['isNew'] == true,
+                    )
+                    .toList();
 
-          if (newItems.isNotEmpty) {
-            final latest = newItems.first;
-            await notificationService.showNotification(
-              id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-              title: latest['title'] ?? 'New Notification',
-              body:
-                  latest['description'] ??
-                  'You have a new message from the canteen.',
+                if (newItems.isNotEmpty) {
+                  final latest = newItems.first;
+                  await notificationService.showNotification(
+                    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                    title: latest['title'] ?? 'New Notification',
+                    body:
+                        latest['description'] ??
+                        'You have a new message from the canteen.',
+                  );
+                }
+              }
+            } catch (e) {
+              debugPrint('Error fetching notifications in background: $e');
+            }
+
+            // 2. Pending Payment Reminder Logic
+            await _checkAndSendPendingReminder(
+              studentId,
+              prefs,
+              notificationService,
             );
           }
         }
       }
     } catch (e) {
-      debugPrint('Background fetch error: $e');
+      debugPrint('Background task error: $e');
     }
     return Future.value(true);
   });
+}
+
+Future<void> _checkAndSendPendingReminder(
+  String studentId,
+  SharedPreferences prefs,
+  LocalNotificationService notificationService,
+) async {
+  try {
+    // Check constraints: Max 2 times per day
+    final String todayDate = DateTime.now().toIso8601String().split('T')[0];
+    final String lastDate = prefs.getString('last_pending_reminder_date') ?? '';
+    int dailyCount = prefs.getInt('daily_pending_reminder_count') ?? 0;
+
+    if (lastDate != todayDate) {
+      // Reset for new day
+      dailyCount = 0;
+      await prefs.setString('last_pending_reminder_date', todayDate);
+      await prefs.setInt('daily_pending_reminder_count', 0);
+    }
+
+    if (dailyCount >= 2) {
+      debugPrint('Daily pending reminder limit reached.');
+      return;
+    }
+
+    // Check Balance/Pending Status
+    final response = await ApiService().get('/students/$studentId');
+    if (response.statusCode == 200) {
+      final student = response.data;
+      final double balance = (student['balance'] ?? 0).toDouble();
+      // Assuming monthlyFee is around 3500 usually, but we should rely on what constitutes "Pending"
+      // If student has paymentStatus = 'pending' or calculated dues > 0
+      // Let's use the logic from payments.js:
+      // totalFee = (monthlyFee || 3500) + (fineAmount || 0)
+      // remainingDues = totalFee - balance
+      final double monthlyFee = (student['monthlyFee'] ?? 3500).toDouble();
+      final double fineAmount = (student['fineAmount'] ?? 0).toDouble();
+      double totalFee = monthlyFee + fineAmount;
+
+      // Strict Frontend Check: If balance covers base fee, ignore fine
+      if (balance >= monthlyFee) {
+        totalFee = monthlyFee; // effective total is just base
+      }
+
+      final double remainingDues = totalFee > balance ? totalFee - balance : 0;
+
+      if (remainingDues > 0 && student['paymentStatus'] != 'paid') {
+        // Send Reminder
+        final List<String> messages = [
+          'Reminder: You have pending due of ₹$remainingDues. Please pay soon!',
+          'Don\'t forget to clear your canteen dues of ₹$remainingDues.',
+          'Pending Payment Alert: ₹$remainingDues remaining. Avoid late fees!',
+          'Hey! Just a friendly reminder to settle your mess fees.',
+          'Your canteen fee of ₹$remainingDues is pending. Pay now to enjoy uninterrupted meals.',
+        ];
+
+        final random = Random();
+        final String message = messages[random.nextInt(messages.length)];
+
+        await notificationService.showNotification(
+          id: 999, // Fixed ID for pending reminder or unique? Let's keep it unique enough or Fixed to avoid stacking
+          title: 'Pending Payment ⚠️',
+          body: message,
+        );
+
+        // Update limit counters
+        await prefs.setInt('daily_pending_reminder_count', dailyCount + 1);
+      }
+    }
+  } catch (e) {
+    debugPrint('Error in pending reminder check: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {
