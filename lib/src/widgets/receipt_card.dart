@@ -75,7 +75,7 @@ class _ReceiptCardState extends State<ReceiptCard> {
                   Text(
                     DateFormat(
                       'dd MMM yyyy, hh:mm a',
-                    ).format(widget.transaction.date),
+                    ).format(widget.transaction.date.toLocal()),
                     style: GoogleFonts.roboto(
                       fontSize: 12,
                       color: AppColors.textSecondaryLight,

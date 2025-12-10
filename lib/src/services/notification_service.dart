@@ -40,6 +40,7 @@ class NotificationService extends ChangeNotifier {
         final List<dynamic> data = response.data;
         final newNotifications = data
             .map((json) => NotificationModel.fromJson(json))
+            .where((n) => n.type != NotificationType.deviceOnly)
             .toList();
 
         if (checkForNew && _notifications.isNotEmpty) {

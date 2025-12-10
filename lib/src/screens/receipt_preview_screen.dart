@@ -222,9 +222,10 @@ class ReceiptPreviewScreen extends StatelessWidget {
             context,
             Icons.calendar_today_outlined,
             'Date & Time',
-            DateFormat(
-              'dd MMM yyyy, hh:mm a',
-            ).format(receiptData['dateTime'] ?? DateTime.now()),
+            DateFormat('dd MMM yyyy, hh:mm a').format(
+              (receiptData['dateTime'] as DateTime? ?? DateTime.now())
+                  .toLocal(),
+            ),
           ),
 
           const SizedBox(height: 18),

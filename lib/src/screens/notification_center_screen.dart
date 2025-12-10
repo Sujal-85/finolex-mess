@@ -25,6 +25,13 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+
+    // Auto-mark all as read when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<NotificationService>().markAllAsRead();
+      }
+    });
   }
 
   @override

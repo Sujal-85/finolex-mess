@@ -18,6 +18,14 @@ class LocalNotificationService {
 
   Future<void> init() async {
     tz.initializeTimeZones();
+    // Fix LateInitializationError by setting a default local location
+    try {
+      tz.setLocalLocation(tz.getLocation('Asia/Kolkata'));
+    } catch (e) {
+      debugPrint('Error setting local location: $e');
+      // Fallback if Hyderabad/Kolkata not found (unlikely with latest data)
+      tz.setLocalLocation(tz.getLocation('UTC'));
+    }
 
     const fln.AndroidInitializationSettings initializationSettingsAndroid =
         fln.AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -42,6 +50,13 @@ class LocalNotificationService {
             // Handle notification tap
           },
     );
+
+    // Request permissions for Android 13+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          fln.AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
   }
 
   Future<void> showNotification({
