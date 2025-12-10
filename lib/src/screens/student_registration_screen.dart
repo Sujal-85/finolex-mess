@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/cloudinary_service.dart';
-import '../services/local_notification_service.dart';
 import '../theme/colors.dart';
 
 class StudentRegistrationScreen extends StatefulWidget {
@@ -164,71 +164,99 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     );
   }
 
-  String? _generatedMobileOtp;
+  String? _verificationId;
 
   Future<void> _verifyContact(String type) async {
     final controller = type == 'email' ? _emailController : _phoneController;
     final value = controller.text.trim();
     if (value.isEmpty) return;
 
+    setState(() => _isSubmitting = true);
+
     if (type == 'mobile') {
-      // Local OTP Generation for Mobile
-      final otp = (100000 + DateTime.now().millisecondsSinceEpoch % 900000)
-          .toString();
-      setState(() => _generatedMobileOtp = otp);
-
-      // Show Local Notification (Mobile) or SnackBar (Web)
-      if (kIsWeb) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Web Dev Mode: Your OTP is $otp'),
-            backgroundColor: AppColors.info,
-            duration: const Duration(seconds: 10),
-            action: SnackBarAction(
-              label: 'COPY',
-              textColor: Colors.white,
-              onPressed: () => _otpController.text = otp,
+      // Firebase Phone Auth
+      await _authService.verifyPhoneNumber(
+        phoneNumber: '+91$value', // Prepending +91 for India, adjust if needed
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          setState(() {
+            _isPhoneVerified = true;
+            _isSubmitting = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Phone verified automatically!'),
+              backgroundColor: AppColors.success,
             ),
-          ),
-        );
-      } else {
-        await LocalNotificationService().showNotification(
-          id: 999,
-          title: 'Mobile Verification OTP',
-          body: 'Your OTP is: $otp',
-        );
-      }
-
-      _showOtpDialog(type, value);
+          );
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          setState(() => _isSubmitting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(e.message ?? 'Verification failed'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          setState(() {
+            _verificationId = verificationId;
+            _isSubmitting = false;
+          });
+          _showOtpDialog(type, value);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          if (mounted) {
+            setState(() => _verificationId = verificationId);
+          }
+        },
+      );
       return;
     }
 
-    setState(() => _isSubmitting = true);
+    // EMAIL OTP Verification
     final success = await _authService.sendEmailOtp(value);
     setState(() => _isSubmitting = false);
 
     if (success['success']) {
       _showOtpDialog(type, value);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success['message']),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
   void _showOtpDialog(String type, String contact) {
+    bool isEmail = type == 'email';
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.surface(context),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Verify ${type == 'email' ? 'Email' : 'Phone'}',
+          isEmail ? 'Verify Email' : 'Verify Phone',
           style: TextStyle(color: AppColors.textPrimary(context)),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'OTP sent to $contact',
-              style: TextStyle(color: AppColors.textSecondary(context)),
-            ),
+            if (isEmail)
+              Text(
+                'A verification code has been sent to $contact.\nPlease check your inbox/spam and enter the code below.',
+                style: TextStyle(color: AppColors.textSecondary(context)),
+                textAlign: TextAlign.center,
+              )
+            else
+              Text(
+                'Enter the 6-digit OTP sent to $contact',
+                style: TextStyle(color: AppColors.textSecondary(context)),
+              ),
             const SizedBox(height: 16),
             TextField(
               controller: _otpController,
@@ -258,17 +286,74 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
               style: TextStyle(color: AppColors.textSecondary(context)),
             ),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            onPressed: () async {
-              final otp = _otpController.text.trim();
-              if (otp.length != 6) return;
+          if (isEmail)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              onPressed: () async {
+                final otp = _otpController.text.trim();
+                // We'll support 6 digit OTP
+                if (otp.length != 6) return;
 
-              Navigator.pop(context);
+                Navigator.pop(context);
+                _otpController.clear();
 
-              if (type == 'mobile') {
-                // Local Verification for Mobile
-                if (otp == _generatedMobileOtp) {
+                setState(() => _isSubmitting = true);
+                final verified = await _authService.verifyEmailOtp(
+                  contact,
+                  otp,
+                );
+
+                setState(() => _isSubmitting = false);
+
+                if (verified['success']) {
+                  setState(() => _isEmailVerified = true);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Email verified!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                } else {
+                  _showOtpDialog(type, contact); // Re-show dialog on error
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(verified['message']),
+                      backgroundColor: AppColors.error,
+                    ),
+                  );
+                }
+              },
+              child: const Text(
+                'Verify Email',
+                style: TextStyle(color: Colors.white),
+              ),
+            )
+          else
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              onPressed: () async {
+                final otp = _otpController.text.trim();
+                if (otp.length != 6) return;
+
+                Navigator.pop(context);
+                _otpController.clear(); // Clear OTP field
+
+                setState(() => _isSubmitting = true);
+                Map<String, dynamic> verified;
+
+                // Firebase Phone Verify
+                verified = await _authService.verifyMobileOtp(
+                  _verificationId ?? '',
+                  otp,
+                );
+
+                setState(() => _isSubmitting = false);
+
+                if (verified['success']) {
                   setState(() => _isPhoneVerified = true);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -277,39 +362,20 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                     ),
                   );
                 } else {
+                  _showOtpDialog(type, contact); // Re-show dialog on failure
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Invalid OTP'),
+                    SnackBar(
+                      content: Text(verified['message']),
                       backgroundColor: AppColors.error,
                     ),
                   );
                 }
-                return;
-              }
-
-              setState(() => _isSubmitting = true);
-              final verified = await _authService.verifyEmailOtp(contact, otp);
-              setState(() => _isSubmitting = false);
-
-              if (verified['success']) {
-                setState(() => _isEmailVerified = true);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Email verified!'),
-                    backgroundColor: AppColors.success,
-                  ),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(verified['message']),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-              }
-            },
-            child: const Text('Verify', style: TextStyle(color: Colors.white)),
-          ),
+              },
+              child: const Text(
+                'Verify',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
         ],
       ),
     );
@@ -533,7 +599,10 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                     onPrimary: Colors.white,
                     surface: AppColors.surface(context),
                     onSurface: AppColors.textPrimary(context),
-                  ), dialogTheme: DialogThemeData(backgroundColor: AppColors.surface(context)),
+                  ),
+                  dialogTheme: DialogThemeData(
+                    backgroundColor: AppColors.surface(context),
+                  ),
                 ),
                 child: child!,
               );

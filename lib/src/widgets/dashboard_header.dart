@@ -99,14 +99,23 @@ class DashboardHeader extends StatelessWidget {
                     right: 8,
                     top: 8,
                     child: Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(6),
                       decoration: const BoxDecoration(
                         color: AppColors.error,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(
-                        minWidth: 8,
-                        minHeight: 8,
+                        minWidth: 20,
+                        minHeight: 20,
+                      ),
+                      child: Text(
+                        notificationCount > 9 ? '9+' : '$notificationCount',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),

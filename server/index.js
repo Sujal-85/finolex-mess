@@ -23,13 +23,23 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
     .then(() => {
         console.log('Connected to MongoDB');
 
-        // Drop legacy index if it exists to fix registration error
+        // Drop legacy indexes if they exist to fix registration error
         try {
-            mongoose.connection.collection('students').dropIndex('rollNumber_1')
-                .then(() => console.log('Dropped legacy index: rollNumber_1'))
-                .catch(err => console.log('Legacy index rollNumber_1 check: ' + (err.codeName || err.message)));
+            const collection = mongoose.connection.collection('students');
+            const indexesToDrop = ['rollNumber_1', 'roll_no_1', 'rollNo_1'];
+
+            indexesToDrop.forEach(indexName => {
+                collection.dropIndex(indexName)
+                    .then(() => console.log(`Dropped legacy index: ${indexName}`))
+                    .catch(err => {
+                        // Ignore 'index not found' errors
+                        if (err.codeName !== 'IndexNotFound') {
+                            console.log(`Legacy index ${indexName} check: ` + (err.codeName || err.message));
+                        }
+                    });
+            });
         } catch (e) {
-            console.log('Error checking legacy index:', e);
+            console.log('Error checking legacy indexes:', e);
         }
 
         // Migration: Add 'days' to all menu items if missing
@@ -57,7 +67,7 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         const studentRoutes = require('./routes/students');
         const userRoutes = require('./routes/users');
         const feedbackRoutes = require('./routes/feedback');
-        const verifyRoutes = require('./routes/verify');
+
         const uploadRoutes = require('./routes/upload');
         const notificationRoutes = require('./routes/notification');
         const scheduler = require('./services/scheduler');
@@ -74,9 +84,10 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         app.use('/api/students', studentRoutes);
         app.use('/api/users', userRoutes);
         app.use('/api/feedback', feedbackRoutes);
-        app.use('/api/verify', verifyRoutes);
+
         app.use('/api/upload', uploadRoutes);
         app.use('/api/notifications', notificationRoutes);
+        app.use('/api/verify', require('./routes/verify'));
 
         // Serve uploaded files statically
         app.use('/uploads', express.static('uploads'));

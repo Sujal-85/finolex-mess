@@ -73,7 +73,7 @@ class NotificationService extends ChangeNotifier {
         );
       } else {
         // Optional: Notify for all new items or just specific types
-         _localNotificationService.showNotification(
+        _localNotificationService.showNotification(
           id: item.hashCode,
           title: item.title,
           body: item.description,
@@ -96,7 +96,8 @@ class NotificationService extends ChangeNotifier {
         .toList();
   }
 
-  void markAsRead(String id) {
+  Future<void> markAsRead(String id) async {
+    // 1. Optimistic Update
     final index = _notifications.indexWhere(
       (notification) => notification.id == id,
     );
@@ -111,10 +112,24 @@ class NotificationService extends ChangeNotifier {
         isNew: _notifications[index].isNew,
       );
       notifyListeners();
+
+      // 2. API Call
+      try {
+        await ApiService().patch('/notifications/$id/read');
+      } catch (e) {
+        debugPrint('Error marking notification as read: $e');
+        // Optional: Revert optimistic update if needed, but not critical for read status
+      }
     }
   }
 
-  void markAllAsRead() {
+  Future<void> markAllAsRead() async {
+    // 1. Optimistic Update
+    final unreadIds = _notifications
+        .where((n) => n.isUnread)
+        .map((n) => n.id)
+        .toList();
+
     _notifications = _notifications.map((notification) {
       return NotificationModel(
         id: notification.id,
@@ -127,6 +142,16 @@ class NotificationService extends ChangeNotifier {
       );
     }).toList();
     notifyListeners();
+
+    // 2. API Calls (Sync)
+    // ideal: add a bulk update endpoint. For now, loop.
+    for (final id in unreadIds) {
+      try {
+        await ApiService().patch('/notifications/$id/read');
+      } catch (e) {
+        debugPrint('Error marking notification $id as read: $e');
+      }
+    }
   }
 
   void deleteNotification(String id) {
