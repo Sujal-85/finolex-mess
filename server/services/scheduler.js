@@ -92,18 +92,55 @@ const scheduler = {
                     return;
                 }
 
+                // Fetch Active Plan Price
+                const plan = await require('../models/Plan').findOne({ active: true });
+                const baseFee = plan ? (plan.price ?? plan.amount) : 3500;
+
                 // Find students pending/overdue
                 const students = await Student.find({
                     paymentStatus: { $in: ['pending', 'overdue'] }
                 });
-                console.log(`[DEBUG] Found ${students.length} students for reminder.`);
+                console.log(`[DEBUG] Found ${students.length} students with pending status.`);
 
-                if (students.length > 0) {
+                const eligibleStudents = [];
+
+                for (const student of students) {
+                    // Check logic: If base fee is covered, ignore fine for reminder purposes
+                    // Or follow standard "Read-Repair" logic
+                    const balance = student.balance || 0;
+
+                    // Simple Outstanding Check
+                    let outstanding = 0;
+
+                    // If balance covers base fee, treat as paid for reminder purposes (User requirement)
+                    if (balance >= baseFee) {
+                        outstanding = 0;
+                        // Optionally auto-repair status here
+                        if (student.paymentStatus !== 'paid') {
+                            student.paymentStatus = 'paid';
+                            student.fineAmount = 0;
+                            await student.save();
+                            console.log(`[Scheduler Read-Repair] Marked ${student.name} as paid.`);
+                        }
+                    } else {
+                        // Not covered base fee
+                        const totalFee = baseFee + (student.fineAmount || 0);
+                        outstanding = totalFee - balance;
+                    }
+
+                    if (outstanding > 0) {
+                        eligibleStudents.push({ student, outstanding });
+                    }
+                }
+
+                console.log(`[DEBUG] ${eligibleStudents.length} students actually have outstanding dues > 0.`);
+
+                if (eligibleStudents.length > 0) {
                     // 1. Create Database Notifications (History)
-                    const notifications = students.map(student => ({
+                    const notifications = eligibleStudents.map(({ student, outstanding }) => ({
                         userId: student._id,
                         title: 'Payment Pending ⚠️',
-                        description: `Immediate Reminder: Your mess payment is pending. Please pay to avoid further fines.`,
+                        description: `Immediate Reminder: Your mess payment of ₹${outstanding} is pending. Please pay to avoid further fines.`,
                         type: 'device_only'
                     }));
 
@@ -111,8 +148,8 @@ const scheduler = {
                     console.log('Payment pending reminders inserted (Device Only).');
 
                     // 2. Send FCM Push Notifications
-                    const tokens = students
-                        .map(s => s.fcmToken)
+                    const tokens = eligibleStudents
+                        .map(({ student }) => student.fcmToken)
                         .filter(token => token && token.length > 0);
 
                     console.log(`[DEBUG] Found ${tokens.length} valid FCM tokens.`);
@@ -129,14 +166,6 @@ const scheduler = {
                         try {
                             const response = await admin.messaging().sendEachForMulticast(message);
                             console.log(response.successCount + ' messages were sent successfully');
-                            if (response.failureCount > 0) {
-                                console.log(response.failureCount + ' messages failed.');
-                                response.responses.forEach((resp, idx) => {
-                                    if (!resp.success) {
-                                        console.log(`Token: ${tokens[idx]}, Error: ${resp.error}`);
-                                    }
-                                });
-                            }
                         } catch (error) {
                             console.log('Error sending FCM message:', error);
                         }

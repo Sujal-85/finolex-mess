@@ -48,11 +48,24 @@ router.get('/history/:studentId', async (req, res) => {
 });
 
 // Update Transaction Status (Approval)
+// Import Plan
+const Plan = require('../models/Plan');
+
+// Helper to get active plan price
+async function getActivePlanPrice() {
+    try {
+        const plan = await Plan.findOne({ active: true });
+        return plan ? plan.price : 3500;
+    } catch (e) {
+        return 3500;
+    }
+}
+
 router.put('/update-status', async (req, res) => {
     try {
         const { transactionId, status } = req.body;
-
         const transaction = await Transaction.findById(transactionId);
+
         if (!transaction) {
             return res.status(404).json({ message: 'Transaction not found' });
         }
@@ -70,9 +83,9 @@ router.put('/update-status', async (req, res) => {
                     student.balance += transaction.amount;
 
                     // Check if fully paid
-                    // Assuming Total Monthly Fee = 3500 + Fine
-                    // Use stored monthlyFee if available, else 3500
-                    const totalFee = (student.monthlyFee || 3500) + (student.fineAmount || 0);
+                    // Assuming Total Monthly Fee = Plan Price + Fine
+                    const planPrice = await getActivePlanPrice();
+                    const totalFee = planPrice + (student.fineAmount || 0);
                     const remainingDues = Math.max(0, totalFee - student.balance);
 
                     let title = 'Payment Approved ✅';

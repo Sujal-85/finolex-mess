@@ -88,6 +88,7 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         app.use('/api/upload', uploadRoutes);
         app.use('/api/notifications', notificationRoutes);
         app.use('/api/verify', require('./routes/verify'));
+        app.use('/api/plans', require('./routes/plans'));
 
         // Serve uploaded files statically
         app.use('/uploads', express.static('uploads'));

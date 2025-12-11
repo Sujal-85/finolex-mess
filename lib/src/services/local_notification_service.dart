@@ -52,7 +52,7 @@ class LocalNotificationService {
     );
 
     // Request permissions for Android 13+
-    // await requestPermissions(); // Removed to delay permission request
+    await requestPermissions();
   }
 
   Future<void> requestPermissions() async {

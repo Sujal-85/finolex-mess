@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../theme/colors.dart';
 
 class PlanDetailsDialog extends StatefulWidget {
   final String messType;
+  final double messFee;
 
-  const PlanDetailsDialog({super.key, required this.messType});
+  const PlanDetailsDialog({
+    super.key,
+    required this.messType,
+    this.messFee = 3500.0,
+  });
 
   @override
   State<PlanDetailsDialog> createState() => _PlanDetailsDialogState();
@@ -27,6 +33,33 @@ class _PlanDetailsDialogState extends State<PlanDetailsDialog> {
         _isLoading = false;
       });
     }
+  }
+
+  String _getValidityPeriod() {
+    final now = DateTime.now();
+    final firstDay = DateTime(now.year, now.month, 1);
+    final lastDay = DateTime(now.year, now.month + 1, 0);
+
+    // Format: "1st Dec - 31st Dec"
+    String daySuffix(int day) {
+      if (day >= 11 && day <= 13) return 'th';
+      switch (day % 10) {
+        case 1:
+          return 'st';
+        case 2:
+          return 'nd';
+        case 3:
+          return 'rd';
+        default:
+          return 'th';
+      }
+    }
+
+    String formatDate(DateTime date) {
+      return '${date.day}${daySuffix(date.day)} ${DateFormat('MMM').format(date)}';
+    }
+
+    return '${formatDate(firstDay)} - ${formatDate(lastDay)}';
   }
 
   @override
@@ -58,9 +91,12 @@ class _PlanDetailsDialogState extends State<PlanDetailsDialog> {
         children: [
           _buildDetailRow('Plan Type', widget.messType),
           const Divider(),
-          _buildDetailRow('Total Cost', '₹3500 / month'),
+          _buildDetailRow(
+            'Total Cost',
+            '₹${widget.messFee.toStringAsFixed(0)} / month',
+          ),
           const Divider(),
-          _buildDetailRow('Validity', '1st Dec - 31st Dec'),
+          _buildDetailRow('Validity', _getValidityPeriod()),
           const Divider(),
           _buildDetailRow('Status', 'Active'),
           const SizedBox(height: 16),

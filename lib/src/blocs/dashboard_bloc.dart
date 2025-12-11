@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
@@ -145,19 +144,27 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
       }
 
+      double messFee = 3500.0;
+      try {
+        final planResponse = await api.get('/plans');
+        if (planResponse.statusCode == 200 && planResponse.data != null) {
+          messFee = (planResponse.data['price'] ?? 3500).toDouble();
+        }
+      } catch (e) {
+        print('Error fetching plan: $e');
+      }
+
       // Adjust balance to include 'Completed' transactions which are legacy/unsynced
       final adjustedBalance = balance + completedUnsyncedAmount;
 
       // Check if total dues are cleared
-      // Assuming 3500 is the hardcoded total fee for now
-      // Calculation logic preserved, notification removed to avoid duplicates
-      // if (adjustedBalance + pendingAmount >= 3500) { ... }
+      // Assuming messFee is the total fee
 
       // Payment Fields extraction
-      // Frontend Logic: If user has paid 3500 (Base Fee), explicitly ignore backend fine.
+      // Frontend Logic: If user has paid Mess Fee, explicitly ignore backend fine.
       // This ensures "All Paid" is shown correctly even if backend is slightly out of sync.
       double fineAmount = (user?['fineAmount'] ?? 0).toDouble();
-      if (adjustedBalance >= 3500) {
+      if (adjustedBalance >= messFee) {
         fineAmount = 0.0;
       }
       DateTime? paymentDueDate;
@@ -183,6 +190,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           pendingAmount: pendingAmount,
           fineAmount: fineAmount,
           paymentDueDate: paymentDueDate,
+          messFee: messFee,
         ),
       );
     } catch (e) {
