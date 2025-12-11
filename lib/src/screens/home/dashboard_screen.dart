@@ -199,7 +199,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
                     : '10th ${DateFormat('MMM').format(now)}';
 
-                double totalMessFee = 3500.0 + fine;
+                double totalMessFee = state.messFee + fine;
                 double currentBalance = (state.balance ?? 0).toDouble();
                 double outstanding =
                     totalMessFee - currentBalance - pendingAmount;

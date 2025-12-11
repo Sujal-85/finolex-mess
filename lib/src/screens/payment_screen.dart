@@ -11,6 +11,7 @@ import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import '../services/auth_service.dart';
 import '../services/payment_service.dart';
+import '../services/api_service.dart';
 import '../widgets/profile_style_header.dart';
 import '../services/local_notification_service.dart';
 
@@ -81,12 +82,23 @@ class _PaymentScreenState extends State<PaymentScreen>
         debugPrint('Error fetching transactions for balance check: $e');
       }
 
+      double messFee = 3500.0;
+      try {
+        final api = ApiService();
+        final planResponse = await api.get('/plans');
+        if (planResponse.statusCode == 200 && planResponse.data != null) {
+          messFee = (planResponse.data['price'] ?? 3500).toDouble();
+        }
+      } catch (e) {
+        debugPrint('Error fetching plan: $e');
+      }
+
       final double fine = (user['fineAmount'] ?? 0).toDouble();
-      // Dashboard Logic: (3500 + Fine) - Balance - Pending
+      // Dashboard Logic: (Fee + Fine) - Balance - Pending
       // Also apply the same "Ignore Fine if Paid Base" logic from Dashboard
-      double totalFee = 3500.0 + fine;
-      if (balance >= 3500.0) {
-        totalFee = 3500.0; // Ignore fine if base is covered
+      double totalFee = messFee + fine;
+      if (balance >= messFee) {
+        totalFee = messFee; // Ignore fine if base is covered
       }
 
       final double remaining = totalFee - balance - pendingAmount;

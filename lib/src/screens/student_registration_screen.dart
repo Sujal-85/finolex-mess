@@ -693,7 +693,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   ),
                 ),
                 value: _isHostelite,
-                activeColor: AppColors.primary,
+                activeThumbColor: AppColors.primary,
                 onChanged: (v) => setState(() => _isHostelite = v),
               ),
               if (_isHostelite) ...[

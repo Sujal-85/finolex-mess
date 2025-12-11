@@ -7,6 +7,19 @@ const jwt = require('jsonwebtoken');
 // Secret key (should be in .env)
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 
+// Import Plan
+const Plan = require('../models/Plan');
+
+// Helper to get active plan price
+async function getActivePlanPrice() {
+    try {
+        const plan = await Plan.findOne({ active: true });
+        return plan ? plan.price : 3500;
+    } catch (e) {
+        return 3500;
+    }
+}
+
 // Login
 router.post('/login', async (req, res) => {
     try {
@@ -19,7 +32,7 @@ router.post('/login', async (req, res) => {
 
         // Auto-correct / Read-Repair Logic (Login)
         // Check if balance covers base fee, if so clear fine.
-        const baseFee = student.monthlyFee || 3500;
+        const baseFee = await getActivePlanPrice();
         const remainingBaseDues = baseFee - student.balance;
 
         if (remainingBaseDues <= 0 && (student.paymentStatus !== 'paid' || student.fineAmount > 0)) {
@@ -54,7 +67,7 @@ router.get('/:id', async (req, res) => {
         // Auto-correct / Read-Repair Logic
         // If balance is sufficient to cover BASE fees, we assume they paid and clear fines.
         // User Requirement: "fine will be add to the pending amt students only" (implies if base is paid, no fine)
-        const baseFee = student.monthlyFee || 3500;
+        const baseFee = await getActivePlanPrice();
         const remainingBaseDues = baseFee - student.balance;
 
         if (remainingBaseDues <= 0 && (student.paymentStatus !== 'paid' || student.fineAmount > 0)) {
@@ -64,7 +77,9 @@ router.get('/:id', async (req, res) => {
             console.log(`[Read-Repair] Student ${student.name} marked as PAID (Base fee covered).`);
         }
 
-        res.json(student);
+        const studentData = student.toObject();
+        studentData.monthlyFee = baseFee; // Force dynamic plan price for frontend logic
+        res.json(studentData);
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

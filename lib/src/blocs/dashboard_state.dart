@@ -27,6 +27,7 @@ class DashboardLoaded extends DashboardState {
   // New Payment Fields
   final double fineAmount;
   final DateTime? paymentDueDate;
+  final double messFee;
 
   final String breakfastItem;
   final String lunchItem;
@@ -49,6 +50,7 @@ class DashboardLoaded extends DashboardState {
     this.pendingAmount = 0.0,
     this.fineAmount = 0.0,
     this.paymentDueDate,
+    this.messFee = 3500.0,
   });
 
   DashboardLoaded copyWith({
@@ -68,6 +70,7 @@ class DashboardLoaded extends DashboardState {
     double? pendingAmount,
     double? fineAmount,
     DateTime? paymentDueDate,
+    double? messFee,
   }) {
     return DashboardLoaded(
       balance: balance ?? this.balance,
@@ -86,6 +89,7 @@ class DashboardLoaded extends DashboardState {
       pendingAmount: pendingAmount ?? this.pendingAmount,
       fineAmount: fineAmount ?? this.fineAmount,
       paymentDueDate: paymentDueDate ?? this.paymentDueDate,
+      messFee: messFee ?? this.messFee,
     );
   }
 
@@ -107,6 +111,7 @@ class DashboardLoaded extends DashboardState {
     pendingAmount,
     fineAmount,
     paymentDueDate,
+    messFee,
   ];
 }
 

@@ -6,10 +6,13 @@ import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/shimmer_effect.dart';
 import '../widgets/dialogs/plan_details_dialog.dart';
+import '../widgets/dashboard/payment_due_card.dart';
 import '../services/auth_service.dart';
 import '../services/cloudinary_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/payment_service.dart';
+import '../services/api_service.dart';
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -56,6 +59,30 @@ class _ProfileScreenState extends State<ProfileScreen>
     try {
       // Refresh user data to get latest details including hostel info
       final user = await _authService.refreshUser();
+
+      // Fetch Plan (Prioritize usage from user object if available, as backend now provides it)
+      double messFee = 3500.0;
+
+      if (user != null && user['monthlyFee'] != null) {
+        messFee = (user['monthlyFee'] as num).toDouble();
+        debugPrint('Set messFee from user object: $messFee');
+      } else {
+        try {
+          debugPrint('fetching plan from api...');
+          final api = ApiService();
+          final planResponse = await api.get('/plans');
+          debugPrint('Plan Response Status: ${planResponse.statusCode}');
+          debugPrint('Plan Response Data: ${planResponse.data}');
+
+          if (planResponse.statusCode == 200 && planResponse.data != null) {
+            messFee = (planResponse.data['price'] ?? 3500).toDouble();
+            debugPrint('Set messFee from API to: $messFee');
+          }
+        } catch (e) {
+          debugPrint('Error fetching plan: $e');
+        }
+      }
+
       if (user != null) {
         setState(() {
           _userProfile = UserProfile(
@@ -73,6 +100,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             lastPaymentDate: DateTime.now(), // Placeholder
             pendingAmount: 0.0,
             profileImage: user['profileImage'],
+            messFee: messFee,
+            fineAmount: (user['fineAmount'] ?? 0).toDouble(),
           );
 
           // Fetch transactions to calculate real-time pending amount
@@ -114,16 +143,19 @@ class _ProfileScreenState extends State<ProfileScreen>
 
         if (status == 'Pending') {
           pending += amount;
-        } else if (status == 'Completed' ||
-            status == 'Success' ||
-            status == 'Approved') {
+        } else if (status == 'Completed') {
+          // ONLY add 'Completed' status which might be unsynced, ignoring 'Success'/'Approved' which are likely already in balance
           completedUnsynced += amount;
+        }
 
-          if (!lastPaymentFound) {
-            lastPaymentAmount = amount;
-            lastPaymentDate = date;
-            lastPaymentFound = true;
-          }
+        // Track last payment logic separately
+        if ((status == 'Completed' ||
+                status == 'Success' ||
+                status == 'Approved') &&
+            !lastPaymentFound) {
+          lastPaymentAmount = amount;
+          lastPaymentDate = date;
+          lastPaymentFound = true;
         }
       }
 
@@ -591,6 +623,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           const SizedBox(height: 16),
 
+          /*
           // Mess Plan Payment Card
           _buildInfoCard(
             title: 'Mess Plan Payment',
@@ -604,6 +637,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             ],
           ),
+          */
         ],
       ),
     );
@@ -662,8 +696,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   void _showPlanDetailsDialog() {
     showDialog(
       context: context,
-      builder: (context) =>
-          PlanDetailsDialog(messType: _userProfile?.messType ?? 'Standard'),
+      builder: (context) => PlanDetailsDialog(
+        messType: _userProfile?.messType ?? 'Standard',
+        messFee: _userProfile?.messFee ?? 4500.0,
+      ),
     );
   }
 
@@ -699,126 +735,37 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildBalanceRow() {
-    final double targetAmount = 3500;
+    double baseFee = _userProfile?.messFee ?? 3500;
+    double fine = _userProfile?.fineAmount ?? 0;
     final double currentAmount = _userProfile?.currentBalance ?? 0;
     final double pendingAmount = _userProfile?.pendingAmount ?? 0;
 
+    // Frontend Logic: If user has paid Base Fee, explicitly ignore backend fine.
+    if (currentAmount >= baseFee) {
+      fine = 0;
+    }
+
+    final double targetAmount = baseFee + fine;
+
     // Calculate Net Due
-    // Net Due = Total (3500) - (Approved + Pending)
     double netDue = targetAmount - (currentAmount + pendingAmount);
     if (netDue < 0) netDue = 0;
 
-    final double progress = ((currentAmount + pendingAmount) / targetAmount)
-        .clamp(0.0, 1.0);
-
+    return const SizedBox.shrink();
+    /*
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Mess Plan Status',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: AppColors.textSecondaryLight,
-                ),
-              ),
-              if (pendingAmount > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'Pending: ₹${pendingAmount.toStringAsFixed(0)}',
-                    style: GoogleFonts.roboto(
-                      fontSize: 12,
-                      color: Colors.orange,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Net Due',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  Text(
-                    '₹${netDue.toStringAsFixed(0)}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: netDue > 0 ? AppColors.error : Colors.green,
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: _rechargeWallet,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: NeumorphicStyle.buttonDecoration(
-                    context,
-                    borderRadius: 20,
-                    color: AppColors.accent,
-                  ),
-                  child: Text(
-                    'Pay Now',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.primary.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                progress >= 1.0 ? Colors.green : AppColors.primary,
-              ),
-              minHeight: 8,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Paid: ₹${currentAmount.toStringAsFixed(0)} ${pendingAmount > 0 ? '(+ ₹${pendingAmount.toStringAsFixed(0)} pending)' : ''} / ₹${targetAmount.toStringAsFixed(0)}',
-            style: GoogleFonts.roboto(
-              fontSize: 12,
-              color: AppColors.textSecondaryLight,
-            ),
-          ),
-        ],
+      child: PaymentDueCard(
+        amount: netDue,
+        dueDate: '5th ${DateFormat('MMM').format(DateTime.now())}',
+        pendingAmount: pendingAmount,
+        fineAmount: fine.toInt(),
+        onPayNow: () {
+          context.push('/payment');
+        },
       ),
     );
+    */
   }
 
   Widget _buildQuickActions() {
@@ -1421,6 +1368,8 @@ class UserProfile {
   final DateTime lastPaymentDate;
   final double pendingAmount;
   final String? profileImage;
+  final double messFee;
+  final double fineAmount;
 
   UserProfile({
     required this.name,
@@ -1437,6 +1386,8 @@ class UserProfile {
     required this.lastPaymentDate,
     this.pendingAmount = 0.0,
     this.profileImage,
+    this.messFee = 3500.0,
+    this.fineAmount = 0.0,
   });
 }
 
