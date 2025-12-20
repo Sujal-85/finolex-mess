@@ -24,6 +24,8 @@ router.get('/', async (req, res) => {
             price: plan.price ?? plan.amount,
             type: plan.type,
             active: plan.active,
+            startDate: plan.startDate,
+            endDate: plan.endDate,
             createdAt: plan.createdAt,
         };
         res.json(responsePlan);
@@ -35,15 +37,38 @@ router.get('/', async (req, res) => {
 // Create a plan (admin / seeding)
 router.post('/', async (req, res) => {
     try {
-        const { name, price, type, active } = req.body;
+        const { name, price, type, active, startDate, endDate } = req.body;
         const plan = new Plan({
             name,
             price,
             type,
             active,
+            startDate,
+            endDate
         });
         const newPlan = await plan.save();
         res.status(201).json(newPlan);
+    } catch (err) {
+        res.status(400).json({ message: err.message });
+    }
+});
+
+// Update a plan (admin)
+router.patch('/:id', async (req, res) => {
+    try {
+        const { name, price, type, active, startDate, endDate } = req.body;
+        const plan = await Plan.findById(req.params.id);
+        if (!plan) return res.status(404).json({ message: 'Plan not found' });
+
+        if (name) plan.name = name;
+        if (price) plan.price = price;
+        if (type) plan.type = type;
+        if (active !== undefined) plan.active = active;
+        if (startDate) plan.startDate = startDate;
+        if (endDate) plan.endDate = endDate;
+
+        const updatedPlan = await plan.save();
+        res.json(updatedPlan);
     } catch (err) {
         res.status(400).json({ message: err.message });
     }

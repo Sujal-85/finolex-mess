@@ -85,16 +85,25 @@ const scheduler = {
         cron.schedule('30 12,19 * * *', async () => {
             console.log('Running Payment Pending Reminder Job');
             try {
-                // Check if date is 8th or later
-                const today = new Date();
-                if (today.getDate() < 8) {
-                    console.log('Skipping payment reminder (Before 8th).');
+                // Fetch Active Plan
+                const Plan = require('../models/Plan');
+                const plan = await Plan.findOne({ active: true });
+                if (!plan || !plan.startDate) {
+                    console.log('Skipping payment reminder (No active plan/startDate).');
                     return;
                 }
 
-                // Fetch Active Plan Price
-                const plan = await require('../models/Plan').findOne({ active: true });
-                const baseFee = plan ? (plan.price ?? plan.amount) : 3500;
+                // Logic: Start reminder from 8th day of startDate
+                const now = new Date();
+                const eighthDay = new Date(plan.startDate);
+                eighthDay.setDate(eighthDay.getDate() + 7); // startDate + 7 = 8th day start
+
+                if (now < eighthDay) {
+                    console.log('Skipping payment reminder (Before 8th day of plan).');
+                    return;
+                }
+
+                const baseFee = plan.price ?? 3500;
 
                 // Find students pending/overdue
                 const students = await Student.find({
@@ -105,17 +114,11 @@ const scheduler = {
                 const eligibleStudents = [];
 
                 for (const student of students) {
-                    // Check logic: If base fee is covered, ignore fine for reminder purposes
-                    // Or follow standard "Read-Repair" logic
                     const balance = student.balance || 0;
-
-                    // Simple Outstanding Check
                     let outstanding = 0;
 
-                    // If balance covers base fee, treat as paid for reminder purposes (User requirement)
                     if (balance >= baseFee) {
                         outstanding = 0;
-                        // Optionally auto-repair status here
                         if (student.paymentStatus !== 'paid') {
                             student.paymentStatus = 'paid';
                             student.fineAmount = 0;
@@ -123,7 +126,6 @@ const scheduler = {
                             console.log(`[Scheduler Read-Repair] Marked ${student.name} as paid.`);
                         }
                     } else {
-                        // Not covered base fee
                         const totalFee = baseFee + (student.fineAmount || 0);
                         outstanding = totalFee - balance;
                     }
@@ -133,10 +135,8 @@ const scheduler = {
                     }
                 }
 
-                console.log(`[DEBUG] ${eligibleStudents.length} students actually have outstanding dues > 0.`);
-
                 if (eligibleStudents.length > 0) {
-                    // 1. Create Database Notifications (History)
+                    // Create History Notifications
                     const notifications = eligibleStudents.map(({ student, outstanding }) => ({
                         userId: student._id,
                         title: 'Payment Pending ⚠️',
@@ -145,14 +145,11 @@ const scheduler = {
                     }));
 
                     await Notification.insertMany(notifications);
-                    console.log('Payment pending reminders inserted (Device Only).');
 
-                    // 2. Send FCM Push Notifications
+                    // Send FCM Push
                     const tokens = eligibleStudents
                         .map(({ student }) => student.fcmToken)
                         .filter(token => token && token.length > 0);
-
-                    console.log(`[DEBUG] Found ${tokens.length} valid FCM tokens.`);
 
                     if (tokens.length > 0) {
                         const message = {
@@ -162,13 +159,7 @@ const scheduler = {
                             },
                             tokens: tokens
                         };
-
-                        try {
-                            const response = await admin.messaging().sendEachForMulticast(message);
-                            console.log(response.successCount + ' messages were sent successfully');
-                        } catch (error) {
-                            console.log('Error sending FCM message:', error);
-                        }
+                        await admin.messaging().sendEachForMulticast(message);
                     }
                 }
             } catch (error) {
@@ -176,102 +167,131 @@ const scheduler = {
             }
         }, { timezone: "Asia/Kolkata" });
 
-
-
         // 2. Daily Fine Calculation (Every Midnight)
-        // If not paid by due date, add 5 rupees fine daily override
+        // If not paid by 8th day of plan, add 5 rupees fine daily
         cron.schedule('0 0 * * *', async () => {
             console.log('Running Daily Fine Calculation Job');
             try {
-                const now = new Date();
+                const Plan = require('../models/Plan');
+                const plan = await Plan.findOne({ active: true });
+                if (!plan || !plan.startDate) return;
 
-                // Find students who are overdue OR pending who have crossed the date
-                const overdueStudents = await Student.find({
-                    paymentStatus: { $in: ['pending', 'overdue'] },
-                    paymentDueDate: { $lt: now }
+                const now = new Date();
+                const eighthDay = new Date(plan.startDate);
+                eighthDay.setDate(eighthDay.getDate() + 7);
+
+                if (now < eighthDay) {
+                    console.log('Skipping fine calculation (Before 8th day of plan).');
+                    return;
+                }
+
+                // Find students who are overdue OR pending (and 8th day crossed)
+                const targetStudents = await Student.find({
+                    paymentStatus: { $in: ['pending', 'overdue'] }
                 });
 
                 const fineNotifications = [];
 
-                for (const student of overdueStudents) {
-                    // Check if they have actually paid (Balance >= Total Fee)
-                    const totalFee = (student.monthlyFee || 3500) + (student.fineAmount || 0);
+                for (const student of targetStudents) {
+                    const planPrice = plan.price ?? 3500;
+                    const totalFee = planPrice + (student.fineAmount || 0);
                     const remainingDues = totalFee - student.balance;
 
                     if (remainingDues <= 0) {
-                        // Student has enough balance, mark as paid and skip fine
                         student.paymentStatus = 'paid';
+                        student.fineAmount = 0;
                         await student.save();
-                        console.log(`Student ${student.name} marked as PAID (Balance sufficient). Skipping fine.`);
                         continue;
                     }
 
-                    // Update Status
-                    student.paymentStatus = 'overdue';
+                    // Calculate Dynamic Fine: ₹5 per day past the 8th day
+                    const diffTime = Math.abs(now - eighthDay);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                    // Add Fine (5 Rs Daily)
-                    student.fineAmount = (student.fineAmount || 0) + 5;
-                    await student.save();
+                    const newFineAmount = diffDays * 5;
 
-                    // Prepare Notification
-                    fineNotifications.push({
-                        userId: student._id,
-                        title: 'Daily Fine Applied',
-                        description: `A fine of ₹5 has been applied. Total Fine: ₹${student.fineAmount}. Due: ₹${Math.max(0, remainingDues + 5)}`, // remainingDues was before this 5rs, so +5
-                        type: 'urgent'
-                    });
+                    if (student.fineAmount !== newFineAmount) {
+                        student.fineAmount = newFineAmount;
+                        student.paymentStatus = 'overdue';
+                        await student.save();
+
+                        fineNotifications.push({
+                            userId: student._id,
+                            title: 'Daily Fine Applied',
+                            description: `A fine of ₹5/day has been applied. Total Fine: ₹${student.fineAmount}.`,
+                            type: 'urgent'
+                        });
+                    }
                 }
 
                 if (fineNotifications.length > 0) {
                     await Notification.insertMany(fineNotifications);
-                    console.log(`Applied fines and sent notifications to ${fineNotifications.length} students.`);
                 }
-
             } catch (error) {
                 console.error('Error applying daily fines:', error);
             }
         }, { timezone: "Asia/Kolkata" });
 
-        // 3. Monthly Renewal (1st of Every Month)
-        // Renew payment submission logic
-        cron.schedule('0 0 1 * *', async () => {
-            console.log('Running Monthly Payment Renewal Job');
+        // 3. Plan Validity & Renewal check (Daily at Midnight)
+        // Renew payment cycle when Plan.endDate is passed
+        cron.schedule('0 0 * * *', async () => {
+            console.log('Running Plan Validity & Renewal Check Job');
             try {
+                const Plan = require('../models/Plan');
+                const activePlan = await Plan.findOne({ active: true });
+
+                if (!activePlan || !activePlan.endDate) {
+                    console.log('No active plan with end date found for renewal check.');
+                    return;
+                }
+
                 const now = new Date();
-                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 10); // Due date 10th of next month? Or current?
-                // User said "Renew... from day of every month".
-                // Let's set Due Date to 10th of THIS new month.
-                const newDueDate = new Date(now.getFullYear(), now.getMonth(), 10);
+                // Set to midnight today for comparison
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const endDate = new Date(activePlan.endDate);
+                // Expiry is at the end of the day of endDate. 
+                // We check if "today" has passed the "endDate"
+                if (today > endDate) {
+                    console.log(`Plan "${activePlan.name}" expired on ${activePlan.endDate}. Triggering Renewal...`);
 
-                // Update ALL students
-                // Note: We might want to keep 'overdue' status if they haven't paid previous? 
-                // Or just reset for the new cycle (Dues accumulate in balance/fine, but 'status' resets for the new bill)?
-                // User said "Renew the next month payment submission".
-                // I will Reset status to 'pending' (so they aren't 'overdue' for the NEW bill immediately)
-                // But their Balance should reflect previous dues (handled in Student Balance ideally).
+                    // 1. Reset all students for the new cycle
+                    // We set them to pending so they have to pay for the new period
+                    // New due date is 10 days from now (or 10th of this month if it's early?)
+                    // Let's stick to the concept of "10th of the (newly started) period"
+                    const newDueDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 10);
 
-                await Student.updateMany({}, {
-                    $set: {
-                        paymentStatus: 'pending',
-                        paymentDueDate: newDueDate,
-                        // We don't reset fineAmount here likely, as they still owe it? 
-                        // Or maybe fine resets per month? Usually fines stick.
-                        // Keeping fineAmount.
-                        lastPaymentResetDate: now
-                    }
-                });
+                    const resetResult = await Student.updateMany({}, {
+                        $set: {
+                            paymentStatus: 'pending',
+                            paymentDueDate: newDueDate,
+                            lastPaymentResetDate: today,
+                            fineAmount: 0
+                        }
+                    });
 
-                const notification = new Notification({
-                    title: 'New Month Started',
-                    description: 'Mess fees for this month are now generated. Please pay by the 10th.',
-                    type: 'mess'
-                });
-                await notification.save();
+                    console.log(`Reset payment status for ${resetResult.modifiedCount} students.`);
 
-                console.log('Monthly renewal complete.');
+                    // 2. Update the Plan (Cycle Start/End)
+                    // "next day new start will be their"
+                    activePlan.startDate = today;
+                    // "active until new date is not updated by admin" -> clear end date
+                    activePlan.endDate = null;
+                    await activePlan.save();
 
+                    // 3. Send Notification
+                    const notification = new Notification({
+                        title: 'Mess Plan Renewed 📅',
+                        description: `The mess plan cycle has been renewed. New period started on ${today.toLocaleDateString()}. Please clear your dues by ${newDueDate.toLocaleDateString()}.`,
+                        type: 'mess'
+                    });
+                    await notification.save();
+
+                    console.log('Date-based renewal complete.');
+                } else {
+                    console.log(`Plan "${activePlan.name}" is still valid until ${activePlan.endDate}.`);
+                }
             } catch (error) {
-                console.error('Error in monthly renewal:', error);
+                console.error('Error in plan renewal job:', error);
             }
         }, { timezone: "Asia/Kolkata" });
         // TEST JOB (Runs every minute)
