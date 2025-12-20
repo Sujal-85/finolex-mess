@@ -14,7 +14,10 @@ const Plan = require('../models/Plan');
 async function getActivePlanPrice() {
     try {
         const plan = await Plan.findOne({ active: true });
-        return plan ? plan.price : 3500;
+        if (plan) {
+            return plan.price ?? plan.amount ?? 3500;
+        }
+        return 3500;
     } catch (e) {
         return 3500;
     }
