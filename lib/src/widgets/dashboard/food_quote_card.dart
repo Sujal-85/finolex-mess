@@ -1,37 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lottie/lottie.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
 
 class FoodQuoteCard extends StatefulWidget {
-  const FoodQuoteCard({super.key});
+  final VoidCallback? onLike;
+
+  const FoodQuoteCard({super.key, this.onLike});
 
   @override
   State<FoodQuoteCard> createState() => _FoodQuoteCardState();
 }
 
-class _FoodQuoteCardState extends State<FoodQuoteCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _FoodQuoteCardState extends State<FoodQuoteCard> {
   bool _isLiked = false;
-  bool _showPopper = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   final List<Map<String, String>> _quotes = [
     {
@@ -243,47 +226,24 @@ class _FoodQuoteCardState extends State<FoodQuoteCard>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        if (_showPopper)
-                          Lottie.asset(
-                            'assets/lottie/party propper.json',
-                            controller: _controller,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            repeat: false,
-                            onLoaded: (composition) {
-                              _controller.duration = composition.duration;
-                              _controller.forward().then((value) {
-                                setState(() {
-                                  _showPopper = false;
-                                  _controller.reset();
-                                });
-                              });
-                            },
-                          ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              _isLiked = !_isLiked;
-                              if (_isLiked) {
-                                _showPopper = true;
-                              }
-                            });
-                          },
-                          icon: Icon(
-                            _isLiked
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            color: _isLiked
-                                ? Colors.red
-                                : AppColors.textSecondaryLight,
-                            size: 24,
-                          ),
-                        ),
-                      ],
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _isLiked = !_isLiked;
+                          if (_isLiked && widget.onLike != null) {
+                            widget.onLike!();
+                          }
+                        });
+                      },
+                      icon: Icon(
+                        _isLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: _isLiked
+                            ? Colors.red
+                            : AppColors.textSecondaryLight,
+                        size: 24,
+                      ),
                     ),
                     IconButton(
                       onPressed: () {

@@ -24,7 +24,7 @@ import '../../services/receipt_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/permission_service.dart';
 import '../../widgets/soft_ask_dialog.dart';
-// For ReceiptModal
+import '../receipt_preview_screen.dart'; // For ReceiptPreviewScreen
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -33,15 +33,29 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _confettiController;
+  bool _showConfetti = false;
+  @override
   @override
   void initState() {
     super.initState();
+    _confettiController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
     context.read<DashboardBloc>().add(DashboardLoadRequested());
     // Request permissions after build with a professional soft ask
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _checkNotificationPermission();
     });
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkNotificationPermission() async {
@@ -78,20 +92,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Generating Receipt...')));
+        ).showSnackBar(const SnackBar(content: Text('Saving Receipt...')));
       }
 
-      await ReceiptService().generateAndDownloadReceipt(transaction, user);
+      final file = await ReceiptService().saveReceiptFile(transaction, user);
 
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Receipt Downloaded!'),
+          SnackBar(
+            content: Text('Receipt saved Successfully'),
             backgroundColor: AppColors.success,
           ),
         );
       }
+
+      // Show Local Notification
+      await LocalNotificationService().showNotification(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title: 'Receipt Downloaded',
+        body: 'Receipt saved successfully.',
+      );
     } catch (e) {
       debugPrint('Error downloading receipt: $e');
       if (mounted) {
@@ -105,490 +126,563 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _shareReceipt(Transaction transaction) async {
+    try {
+      final user = await AuthService().getUser();
+      if (user == null) return;
+      await ReceiptService().shareReceipt(transaction, user);
+    } catch (e) {
+      debugPrint('Error sharing receipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _viewReceipt(Transaction transaction) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReceiptPreviewScreen(transaction: transaction),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background(context),
       body: SafeArea(
-        child: BlocListener<DashboardBloc, DashboardState>(
-          listener: (context, state) {
-            if (state is DashboardLoaded) {
-              final notificationService = LocalNotificationService();
+        child: Stack(
+          children: [
+            BlocListener<DashboardBloc, DashboardState>(
+              listener: (context, state) {
+                if (state is DashboardLoaded) {
+                  final notificationService = LocalNotificationService();
 
-              // Schedule Daily Meal Reminders
-              notificationService.scheduleDailyNotification(
-                id: 10,
-                title: 'Good Morning! ☀️',
-                body: 'Breakfast is ready! Today: ${state.breakfastItem}',
-                hour: 8,
-                minute: 0,
-              );
-              notificationService.scheduleDailyNotification(
-                id: 11,
-                title: 'Lunch Time! 🍛',
-                body: 'Lunch is served! Today: ${state.lunchItem}',
-                hour: 12,
-                minute: 30,
-              );
-              notificationService.scheduleDailyNotification(
-                id: 12,
-                title: 'Dinner is Served! 🌙',
-                body: 'Dinner is ready! Today: ${state.dinnerItem}',
-                hour: 19,
-                minute: 30,
-              );
+                  // Schedule Daily Meal Reminders
+                  notificationService.scheduleDailyNotification(
+                    id: 10,
+                    title: 'Good Morning! ☀️',
+                    body: 'Breakfast is ready! Today: ${state.breakfastItem}',
+                    hour: 8,
+                    minute: 0,
+                  );
+                  notificationService.scheduleDailyNotification(
+                    id: 11,
+                    title: 'Lunch Time! 🍛',
+                    body: 'Lunch is served! Today: ${state.lunchItem}',
+                    hour: 12,
+                    minute: 30,
+                  );
+                  notificationService.scheduleDailyNotification(
+                    id: 12,
+                    title: 'Dinner is Served! 🌙',
+                    body: 'Dinner is ready! Today: ${state.dinnerItem}',
+                    hour: 19,
+                    minute: 30,
+                  );
 
-              // Schedule Menu Update Notification
-              notificationService.scheduleDailyNotification(
-                id: 20,
-                title: 'Menu Updated 📅',
-                body: 'Check out today\'s menu including ${state.lunchItem}!',
-                hour: 7,
-                minute: 0,
-              );
+                  // Schedule Menu Update Notification
+                  notificationService.scheduleDailyNotification(
+                    id: 20,
+                    title: 'Menu Updated 📅',
+                    body:
+                        'Check out today\'s menu including ${state.lunchItem}!',
+                    hour: 7,
+                    minute: 0,
+                  );
 
-              // Schedule Payment Due Notification if balance is low and grace period passed
-              bool shouldNotify = state.balance < state.messFee;
-              if (state.planStartDate != null) {
-                final graceDeadline = state.planStartDate!.add(
-                  const Duration(days: 7),
-                );
-                if (DateTime.now().isBefore(graceDeadline)) {
-                  shouldNotify = false; // Silence during grace period
+                  // Schedule Payment Due Notification if balance is low and grace period passed
+                  bool shouldNotify = state.balance < state.messFee;
+                  if (state.planStartDate != null) {
+                    final graceDeadline = state.planStartDate!.add(
+                      const Duration(days: 7),
+                    );
+                    if (DateTime.now().isBefore(graceDeadline)) {
+                      shouldNotify = false; // Silence during grace period
+                    }
+                  }
+
+                  if (shouldNotify) {
+                    notificationService.scheduleDailyNotification(
+                      id: 100,
+                      title: 'Payment Due ⚠️',
+                      body:
+                          'Your mess fees are due. Please pay to avoid penalties.',
+                      hour: 10,
+                      minute: 0,
+                    );
+                  } else {
+                    notificationService.cancelNotification(100);
+                  }
                 }
-              }
+              },
+              child: BlocBuilder<DashboardBloc, DashboardState>(
+                builder: (context, state) {
+                  if (state is DashboardLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              if (shouldNotify) {
-                notificationService.scheduleDailyNotification(
-                  id: 100,
-                  title: 'Payment Due ⚠️',
-                  body:
-                      'Your mess fees are due. Please pay to avoid penalties.',
-                  hour: 10,
-                  minute: 0,
-                );
-              } else {
-                notificationService.cancelNotification(100);
-              }
-            }
-          },
-          child: BlocBuilder<DashboardBloc, DashboardState>(
-            builder: (context, state) {
-              if (state is DashboardLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (state is DashboardError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Lottie.asset(
-                          'assets/lottie/Not found error.json',
-                          height: 200,
-                          fit: BoxFit.contain,
+                  if (state is DashboardError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Lottie.asset(
+                              'assets/lottie/Not found error.json',
+                              height: 200,
+                              fit: BoxFit.contain,
+                            ),
+                            const SizedBox(height: 32),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  context.read<DashboardBloc>().add(
+                                    DashboardLoadRequested(),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  elevation: 5,
+                                ),
+                                child: Text(
+                                  'Retry Connection',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 32),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () {
+                      ),
+                    );
+                  }
+
+                  // Next Meal Card
+                  if (state is DashboardLoaded) {
+                    final double pendingAmount = state.pendingAmount;
+
+                    // Use Backend Fine & Due Date
+                    final double fine = state.fineAmount;
+                    final DateTime now = DateTime.now();
+
+                    double dynamicFine = 0.0; // Initialize dynamic fine
+
+                    // Show due date from plan (8th day) or backend or default to 10th
+                    String dueDateDisplay;
+                    bool isGracePeriod = false;
+
+                    if (state.planStartDate != null) {
+                      final eighthDay = state.planStartDate!.add(
+                        const Duration(days: 7),
+                      ); // 8th Day
+                      dueDateDisplay =
+                          '${eighthDay.day}th ${DateFormat('MMM').format(eighthDay)}';
+
+                      // Calculate Dynamic Fine: ₹5 per day past eighthDay
+                      if (now.isAfter(eighthDay)) {
+                        final today = DateTime(now.year, now.month, now.day);
+                        final due = DateTime(
+                          eighthDay.year,
+                          eighthDay.month,
+                          eighthDay.day,
+                        );
+                        final diffDays = today.difference(due).inDays;
+                        if (diffDays > 0) {
+                          dynamicFine = diffDays * 5.0;
+                        }
+                      } else {
+                        isGracePeriod = true;
+                      }
+                    } else {
+                      dueDateDisplay = state.paymentDueDate != null
+                          ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
+                          : '10th ${DateFormat('MMM').format(now)}';
+                    }
+
+                    // Final effective fine to show
+                    final double effectiveFine =
+                        (state.balance >= state.messFee) ? 0.0 : dynamicFine;
+
+                    double totalMessFee = state.messFee + effectiveFine;
+                    double currentBalance = (state.balance ?? 0).toDouble();
+                    double outstanding =
+                        totalMessFee - currentBalance - pendingAmount;
+                    if (outstanding < 0) outstanding = 0;
+
+                    return Column(
+                      children: [
+                        // Fixed Header
+                        DashboardHeader(
+                          studentName: state.studentName,
+                          hostelBlock: state.hostelBlock,
+                          roomNumber: state.roomNumber,
+                          notificationCount: state.unreadNotifications,
+                          profileImage: state.profileImage,
+                          onNotificationTap: () async {
+                            await context.push('/notifications');
+                            if (context.mounted) {
                               context.read<DashboardBloc>().add(
-                                DashboardLoadRequested(),
+                                DashboardNotificationCheck(),
+                              );
+                            }
+                          },
+                          onProfileTap: () => context.push('/profile'),
+                        ),
+
+                        // Scrollable Content
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: () async {
+                              context.read<DashboardBloc>().add(
+                                DashboardRefreshRequested(),
                               );
                             },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                              elevation: 5,
-                            ),
-                            child: Text(
-                              'Retry Connection',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.only(bottom: 100),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 20),
+
+                                  // Birthday Card or Quote Card
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: state.birthdays.isNotEmpty
+                                        ? BirthdayCard(
+                                            studentName:
+                                                state.birthdays.first['name'],
+                                            profileImage: state
+                                                .birthdays
+                                                .first['profileImage'],
+                                          )
+                                        : FoodQuoteCard(
+                                            onLike: () {
+                                              setState(() {
+                                                _showConfetti = true;
+                                              });
+                                              _confettiController
+                                                  .forward(from: 0)
+                                                  .then((_) {
+                                                    setState(() {
+                                                      _showConfetti = false;
+                                                    });
+                                                  });
+                                            },
+                                          ),
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        // Payment Due
+                                        Column(
+                                          children: [
+                                            PaymentDueCard(
+                                              amount: outstanding,
+                                              pendingAmount: pendingAmount,
+                                              dueDate: dueDateDisplay,
+                                              fineAmount: effectiveFine.toInt(),
+                                              startDate: state.planStartDate,
+                                              endDate: state.planEndDate,
+                                              onPayNow: () async {
+                                                await context.push('/payment');
+                                                if (context.mounted) {
+                                                  context.read<DashboardBloc>().add(
+                                                    DashboardRefreshRequested(),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                            if (outstanding <= 0) ...[
+                                              Builder(
+                                                builder: (context) {
+                                                  // Find latest full payment receipt
+                                                  final fullPayments = state
+                                                      .recentTransactions
+                                                      .where((t) {
+                                                        final amount =
+                                                            (t['amount'] ?? 0)
+                                                                .toDouble();
+                                                        final status =
+                                                            t['status'] ??
+                                                            'Pending';
+                                                        return amount >= 3400 &&
+                                                            (status ==
+                                                                    'Success' ||
+                                                                status ==
+                                                                    'Completed' ||
+                                                                status ==
+                                                                    'Approved');
+                                                      })
+                                                      .toList();
+
+                                                  if (fullPayments.isEmpty) {
+                                                    return const SizedBox.shrink();
+                                                  }
+
+                                                  // Sort by date desc just in case
+                                                  fullPayments.sort((a, b) {
+                                                    final dateA =
+                                                        DateTime.parse(
+                                                          a['date'],
+                                                        );
+                                                    final dateB =
+                                                        DateTime.parse(
+                                                          b['date'],
+                                                        );
+                                                    return dateB.compareTo(
+                                                      dateA,
+                                                    );
+                                                  });
+
+                                                  final latest =
+                                                      fullPayments.first;
+                                                  final transaction = Transaction(
+                                                    id:
+                                                        latest['razorpayOrderId'] ??
+                                                        'Unknown',
+                                                    amount:
+                                                        (latest['amount'] ?? 0)
+                                                            .toDouble(),
+                                                    date: DateTime.parse(
+                                                      latest['date'],
+                                                    ),
+                                                    paymentMethod:
+                                                        latest['upiId'] != null
+                                                        ? 'UPI'
+                                                        : 'Online',
+                                                    status:
+                                                        latest['status'] ??
+                                                        'Success',
+                                                    upiId: latest['upiId'],
+                                                  );
+
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          top: 16,
+                                                        ),
+                                                    child: ReceiptCard(
+                                                      transaction: transaction,
+                                                      onDownload: () =>
+                                                          _downloadReceipt(
+                                                            transaction,
+                                                          ),
+                                                      onShare: () =>
+                                                          _shareReceipt(
+                                                            transaction,
+                                                          ),
+                                                      onView: () =>
+                                                          _viewReceipt(
+                                                            transaction,
+                                                          ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+
+                                        const SizedBox(height: 24),
+
+                                        // Next Meal Card
+                                        _buildNextMealCard(state.nextMeal),
+
+                                        const SizedBox(height: 24),
+
+                                        // Menu Card
+                                        MenuCard(
+                                          onViewFullMenu: () =>
+                                              context.push('/menu'),
+                                          breakfastItem: state.breakfastItem,
+                                          lunchItem: state.lunchItem,
+                                          dinnerItem: state.dinnerItem,
+                                        ),
+
+                                        const SizedBox(height: 24),
+
+                                        // Quick Actions Header
+                                        Text(
+                                          'Quick Actions',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary(
+                                              context,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 12),
+
+                                        // Action Grid
+                                        LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            return GridView.count(
+                                              shrinkWrap: true,
+                                              physics:
+                                                  const NeverScrollableScrollPhysics(),
+                                              crossAxisCount:
+                                                  3, // Changed to 3 for better visibility
+                                              crossAxisSpacing: 12,
+                                              mainAxisSpacing: 12,
+                                              childAspectRatio: 1.0,
+                                              children: [
+                                                // _buildCompactAction(
+                                                //   'History',
+                                                //   Icons.restaurant_menu,
+                                                //   Colors.blue,
+                                                //   () => context.push('/history'),
+                                                // ),
+                                                _buildCompactAction(
+                                                  'Complaints',
+                                                  Icons.report_problem_outlined,
+                                                  Colors.orange,
+                                                  () => context.push(
+                                                    '/complaints',
+                                                  ),
+                                                ),
+                                                _buildCompactAction(
+                                                  'Support',
+                                                  Icons.headset_mic_outlined,
+                                                  Colors.green,
+                                                  () => context.push(
+                                                    '/emergency',
+                                                  ),
+                                                ),
+                                                _buildCompactAction(
+                                                  'Feedback',
+                                                  Icons.star_outline,
+                                                  Colors.amber,
+                                                  () =>
+                                                      context.push('/feedback'),
+                                                ),
+                                                _buildCompactAction(
+                                                  'Rules',
+                                                  Icons.gavel_outlined,
+                                                  Colors.purple,
+                                                  () => context.push(
+                                                    '/mess-rules',
+                                                  ),
+                                                ),
+                                                _buildCompactAction(
+                                                  'Rebate Cal',
+                                                  Icons.calculate_outlined,
+                                                  Colors.teal,
+                                                  () => context.push(
+                                                    '/rebate-calculator',
+                                                  ),
+                                                ),
+                                                _buildCompactAction(
+                                                  'Settings',
+                                                  Icons.settings_outlined,
+                                                  Colors.grey,
+                                                  () =>
+                                                      context.push('/settings'),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+
+                                        const SizedBox(height: 24),
+
+                                        // Recent Activity
+                                        _buildRecentActivitySection(
+                                          state.recentTransactions,
+                                        ),
+
+                                        const SizedBox(height: 24),
+
+                                        // Announcements
+                                        AnnouncementCard(
+                                          announcement:
+                                              state.latestAnnouncement,
+                                          onTap: () => context.push('/news'),
+                                        ),
+
+                                        const SizedBox(height: 40),
+
+                                        // Footer
+                                        Center(
+                                          child: Column(
+                                            children: [
+                                              Opacity(
+                                                opacity: 0.7,
+                                                child: Image.asset(
+                                                  'assets/images/logo-circle.png',
+                                                  height: 50,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              Text(
+                                                'By Prasanna Caterers',
+                                                style:
+                                                    GoogleFonts.playfairDisplay(
+                                                      fontSize: 16,
+                                                      fontStyle:
+                                                          FontStyle.italic,
+                                                      color: AppColors
+                                                          .textSecondaryLight,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+
+                                        const SizedBox(height: 40),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                );
-              }
-
-              // Next Meal Card
-              if (state is DashboardLoaded) {
-                final double pendingAmount = state.pendingAmount;
-
-                // Use Backend Fine & Due Date
-                final double fine = state.fineAmount;
-                final DateTime now = DateTime.now();
-
-                double dynamicFine = 0.0; // Initialize dynamic fine
-
-                // Show due date from plan (8th day) or backend or default to 10th
-                String dueDateDisplay;
-                bool isGracePeriod = false;
-
-                if (state.planStartDate != null) {
-                  final eighthDay = state.planStartDate!.add(
-                    const Duration(days: 7),
-                  ); // 8th Day
-                  dueDateDisplay =
-                      '${eighthDay.day}th ${DateFormat('MMM').format(eighthDay)}';
-
-                  // Calculate Dynamic Fine: ₹5 per day past eighthDay
-                  if (now.isAfter(eighthDay)) {
-                    final today = DateTime(now.year, now.month, now.day);
-                    final due = DateTime(
-                      eighthDay.year,
-                      eighthDay.month,
-                      eighthDay.day,
                     );
-                    final diffDays = today.difference(due).inDays;
-                    if (diffDays > 0) {
-                      dynamicFine = diffDays * 5.0;
-                    }
-                  } else {
-                    isGracePeriod = true;
                   }
-                } else {
-                  dueDateDisplay = state.paymentDueDate != null
-                      ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
-                      : '10th ${DateFormat('MMM').format(now)}';
-                }
 
-                // Final effective fine to show
-                final double effectiveFine = (state.balance >= state.messFee)
-                    ? 0.0
-                    : dynamicFine;
-
-                double totalMessFee = state.messFee + effectiveFine;
-                double currentBalance = (state.balance ?? 0).toDouble();
-                double outstanding =
-                    totalMessFee - currentBalance - pendingAmount;
-                if (outstanding < 0) outstanding = 0;
-
-                return Column(
-                  children: [
-                    // Fixed Header
-                    DashboardHeader(
-                      studentName: state.studentName,
-                      hostelBlock: state.hostelBlock,
-                      roomNumber: state.roomNumber,
-                      notificationCount: state.unreadNotifications,
-                      profileImage: state.profileImage,
-                      onNotificationTap: () async {
-                        await context.push('/notifications');
-                        if (context.mounted) {
-                          context.read<DashboardBloc>().add(
-                            DashboardNotificationCheck(),
-                          );
-                        }
-                      },
-                      onProfileTap: () => context.push('/profile'),
-                    ),
-
-                    // Scrollable Content
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          context.read<DashboardBloc>().add(
-                            DashboardRefreshRequested(),
-                          );
-                        },
-                        child: SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(bottom: 100),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 20),
-
-                              // Birthday Card or Quote Card
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                child: state.birthdays.isNotEmpty
-                                    ? BirthdayCard(
-                                        studentName:
-                                            state.birthdays.first['name'],
-                                        profileImage: state
-                                            .birthdays
-                                            .first['profileImage'],
-                                      )
-                                    : const FoodQuoteCard(),
-                              ),
-                              const SizedBox(height: 20),
-
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                child: Column(
-                                  children: [
-                                    // Payment Due
-                                    Column(
-                                      children: [
-                                        PaymentDueCard(
-                                          amount: outstanding,
-                                          pendingAmount: pendingAmount,
-                                          dueDate: dueDateDisplay,
-                                          fineAmount: effectiveFine.toInt(),
-                                          startDate: state.planStartDate,
-                                          endDate: state.planEndDate,
-                                          onPayNow: () async {
-                                            await context.push('/payment');
-                                            if (context.mounted) {
-                                              context.read<DashboardBloc>().add(
-                                                DashboardRefreshRequested(),
-                                              );
-                                            }
-                                          },
-                                        ),
-                                        if (outstanding <= 0) ...[
-                                          Builder(
-                                            builder: (context) {
-                                              // Find latest full payment receipt
-                                              final fullPayments = state
-                                                  .recentTransactions
-                                                  .where((t) {
-                                                    final amount =
-                                                        (t['amount'] ?? 0)
-                                                            .toDouble();
-                                                    final status =
-                                                        t['status'] ??
-                                                        'Pending';
-                                                    return amount >= 3400 &&
-                                                        (status == 'Success' ||
-                                                            status ==
-                                                                'Completed' ||
-                                                            status ==
-                                                                'Approved');
-                                                  })
-                                                  .toList();
-
-                                              if (fullPayments.isEmpty) {
-                                                return const SizedBox.shrink();
-                                              }
-
-                                              // Sort by date desc just in case
-                                              fullPayments.sort((a, b) {
-                                                final dateA = DateTime.parse(
-                                                  a['date'],
-                                                );
-                                                final dateB = DateTime.parse(
-                                                  b['date'],
-                                                );
-                                                return dateB.compareTo(dateA);
-                                              });
-
-                                              final latest = fullPayments.first;
-                                              final transaction = Transaction(
-                                                id:
-                                                    latest['razorpayOrderId'] ??
-                                                    'Unknown',
-                                                amount: (latest['amount'] ?? 0)
-                                                    .toDouble(),
-                                                date: DateTime.parse(
-                                                  latest['date'],
-                                                ),
-                                                paymentMethod:
-                                                    latest['upiId'] != null
-                                                    ? 'UPI'
-                                                    : 'Online',
-                                                status:
-                                                    latest['status'] ??
-                                                    'Success',
-                                                upiId: latest['upiId'],
-                                              );
-
-                                              return Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 16,
-                                                ),
-                                                child: ReceiptCard(
-                                                  transaction: transaction,
-                                                  onDownload: () =>
-                                                      _downloadReceipt(
-                                                        transaction,
-                                                      ),
-                                                  onShare: () =>
-                                                      _downloadReceipt(
-                                                        transaction,
-                                                      ),
-                                                  onView: () {
-                                                    // Temporary: direct download or minimal preview
-                                                    // Ideally use ReceiptModal logic if available or just download
-                                                    _downloadReceipt(
-                                                      transaction,
-                                                    );
-                                                  },
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-
-                                    const SizedBox(height: 24),
-
-                                    // Next Meal Card
-                                    _buildNextMealCard(state.nextMeal),
-
-                                    const SizedBox(height: 24),
-
-                                    // Menu Card
-                                    MenuCard(
-                                      onViewFullMenu: () =>
-                                          context.push('/menu'),
-                                      breakfastItem: state.breakfastItem,
-                                      lunchItem: state.lunchItem,
-                                      dinnerItem: state.dinnerItem,
-                                    ),
-
-                                    const SizedBox(height: 24),
-
-                                    // Quick Actions Header
-                                    Text(
-                                      'Quick Actions',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary(context),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    // Action Grid
-                                    LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        return GridView.count(
-                                          shrinkWrap: true,
-                                          physics:
-                                              const NeverScrollableScrollPhysics(),
-                                          crossAxisCount:
-                                              3, // Changed to 3 for better visibility
-                                          crossAxisSpacing: 12,
-                                          mainAxisSpacing: 12,
-                                          childAspectRatio: 1.0,
-                                          children: [
-                                            _buildCompactAction(
-                                              'History',
-                                              Icons.restaurant_menu,
-                                              Colors.blue,
-                                              () => context.push('/history'),
-                                            ),
-                                            _buildCompactAction(
-                                              'Complaints',
-                                              Icons.report_problem_outlined,
-                                              Colors.orange,
-                                              () => context.push('/complaints'),
-                                            ),
-                                            _buildCompactAction(
-                                              'Support',
-                                              Icons.headset_mic_outlined,
-                                              Colors.green,
-                                              () => context.push('/emergency'),
-                                            ),
-                                            _buildCompactAction(
-                                              'Feedback',
-                                              Icons.star_outline,
-                                              Colors.amber,
-                                              () => context.push('/feedback'),
-                                            ),
-                                            _buildCompactAction(
-                                              'Rules',
-                                              Icons.gavel_outlined,
-                                              Colors.purple,
-                                              () => context.push('/mess-rules'),
-                                            ),
-                                            _buildCompactAction(
-                                              'Rebate Cal',
-                                              Icons.calculate_outlined,
-                                              Colors.teal,
-                                              () => context.push(
-                                                '/rebate-calculator',
-                                              ),
-                                            ),
-                                            _buildCompactAction(
-                                              'Settings',
-                                              Icons.settings_outlined,
-                                              Colors.grey,
-                                              () => context.push('/settings'),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-
-                                    const SizedBox(height: 24),
-
-                                    // Recent Activity
-                                    _buildRecentActivitySection(
-                                      state.recentTransactions,
-                                    ),
-
-                                    const SizedBox(height: 24),
-
-                                    // Announcements
-                                    AnnouncementCard(
-                                      announcement: state.latestAnnouncement,
-                                      onTap: () => context.push('/news'),
-                                    ),
-
-                                    const SizedBox(height: 40),
-
-                                    // Footer
-                                    Center(
-                                      child: Column(
-                                        children: [
-                                          Opacity(
-                                            opacity: 0.7,
-                                            child: Image.asset(
-                                              'assets/images/logo-circle.png',
-                                              height: 50,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            'By Prasanna Caterers',
-                                            style: GoogleFonts.playfairDisplay(
-                                              fontSize: 16,
-                                              fontStyle: FontStyle.italic,
-                                              color:
-                                                  AppColors.textSecondaryLight,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 40),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              }
-
-              return const SizedBox.shrink();
-            },
-          ),
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+            if (_showConfetti)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Lottie.asset(
+                    'assets/lottie/party propper.json',
+                    controller: _confettiController,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
 

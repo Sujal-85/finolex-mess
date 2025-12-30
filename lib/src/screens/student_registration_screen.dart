@@ -12,6 +12,7 @@ import '../theme/colors.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import '../utils/image_helper.dart';
 
 class StudentRegistrationScreen extends StatefulWidget {
   const StudentRegistrationScreen({super.key});
@@ -48,7 +49,6 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   DateTime? _selectedDate;
 
   // Toggles
-  bool _isHostelite = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
@@ -140,9 +140,9 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         'dob': _selectedDate?.toIso8601String(),
         'profileImage': imageUrl,
         'hostelDetails': {
-          'isHostelite': _isHostelite,
-          'hostelName': _isHostelite ? _hostelNameController.text.trim() : '',
-          'roomNo': _isHostelite ? _roomNoController.text.trim() : '',
+          'isHostelite': true,
+          'hostelName': _hostelNameController.text.trim(),
+          'roomNo': _roomNoController.text.trim(),
         },
         'isEmailVerified': _isEmailVerified,
         'isPhoneVerified': true,
@@ -170,6 +170,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   }
 
   Future<void> _verifyPhone() async {
+    FocusScope.of(context).unfocus();
     final phone = _phoneController.text.trim();
     if (phone.isEmpty || phone.length < 10) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -240,6 +241,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   }
 
   Future<void> _verifyEmail() async {
+    FocusScope.of(context).unfocus();
     final email = _emailController.text.trim();
     final name = _fullNameController.text.trim();
     if (email.isEmpty) {
@@ -769,7 +771,14 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
               final XFile? image = await picker.pickImage(
                 source: ImageSource.gallery,
               );
-              if (image != null) setState(() => _profileImage = image);
+              if (image != null) {
+                final croppedFile = await ImageHelper.cropImage(
+                  File(image.path),
+                );
+                if (croppedFile != null) {
+                  setState(() => _profileImage = XFile(croppedFile.path));
+                }
+              }
             },
             child: Stack(
               children: [
@@ -866,63 +875,48 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
           ),
         ),
         const SizedBox(height: 24),
-        // Hostel Switch
+        // Hostel Details Section
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: _isHostelite ? AppColors.primary : Colors.transparent,
+              color: AppColors.textSecondary(context).withOpacity(0.2),
             ),
             boxShadow: [
               BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5),
             ],
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SwitchListTile(
-                title: Text(
-                  'I live in College Hostel',
-                  style: TextStyle(
-                    color: AppColors.textPrimary(context),
-                    fontWeight: FontWeight.bold,
-                  ),
+              Text(
+                'Hostel Details',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary(context),
                 ),
-                subtitle: Text(
-                  'Enable if you stay in the campus hostel',
-                  style: TextStyle(
-                    color: AppColors.textSecondary(context),
-                    fontSize: 12,
-                  ),
-                ),
-                value: _isHostelite,
-                activeThumbColor: AppColors.primary,
-                onChanged: (v) => setState(() => _isHostelite = v),
               ),
-              if (_isHostelite) ...[
-                const Divider(),
-                const SizedBox(height: 8),
-                _buildTextField(
-                  _hostelNameController,
-                  'Hostel Name',
-                  Icons.apartment,
-                  validator: (v) =>
-                      _isHostelite && (v == null || v.trim().isEmpty)
-                      ? 'Hostel name is required'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  _roomNoController,
-                  'Room Number',
-                  Icons.door_front_door_outlined,
-                  validator: (v) =>
-                      _isHostelite && (v == null || v.trim().isEmpty)
-                      ? 'Room number is required'
-                      : null,
-                ),
-              ],
+              const SizedBox(height: 16),
+              _buildTextField(
+                _hostelNameController,
+                'Hostel Name',
+                Icons.apartment,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Hostel name is required'
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                _roomNoController,
+                'Room Number',
+                Icons.door_front_door_outlined,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Room number is required'
+                    : null,
+              ),
             ],
           ),
         ),

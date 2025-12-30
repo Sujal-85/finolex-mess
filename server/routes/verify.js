@@ -46,6 +46,17 @@ router.post('/send-email-otp', async (req, res) => {
                     .note-text { color: #bdc3c7; font-size: 12px; margin: 0; }
                     .footer { background-color: #ecf0f1; padding: 20px; text-align: center; }
                     .footer-text { color: #7f8c8d; font-size: 12px; margin: 0; }
+                    
+                    /* Mobile Responsive Styles */
+                    @media screen and (max-width: 600px) {
+                        .container { padding: 10px !important; }
+                        .content { padding: 20px 15px !important; }
+                        .header { padding: 20px !important; }
+                        .otp-box { padding: 15px !important; margin-bottom: 20px !important; width: 100% !important; box-sizing: border-box !important; }
+                        .otp-code { font-size: 28px !important; letter-spacing: 4px !important; }
+                        .title { font-size: 22px !important; }
+                        .text { font-size: 14px !important; }
+                    }
                 </style>
             </head>
             <body>

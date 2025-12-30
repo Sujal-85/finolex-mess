@@ -42,7 +42,7 @@ class _PaymentScreenState extends State<PaymentScreen>
   bool _showSuccess = false;
   XFile? _receiptImage;
   Timer? _timer;
-  int _timeLeft = 300; // 5 minutes
+  final int _timeLeft = 300; // 5 minutes
   int _paymentMethodIndex = 0; // 0: QR Code, 1: UPI ID
   bool _receiptConfirmed = false;
 

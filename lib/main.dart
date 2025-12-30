@@ -66,8 +66,7 @@ Future<void> _initNotifications() async {
       constraints: Constraints(networkType: NetworkType.connected),
     );
 
-    // Schedule Daily Meal Reminders (Moved to WorkManager for robustness as requested)
-    /*
+    // Schedule Daily Meal Reminders (Moved back to explicit scheduling for reliability as requested)
     await notificationService.scheduleDailyNotification(
       id: 1,
       title: 'Good Morning!',
@@ -91,7 +90,6 @@ Future<void> _initNotifications() async {
       hour: 19,
       minute: 30,
     );
-    */
   } catch (e) {
     debugPrint('Error initializing notifications: $e');
   }
@@ -148,8 +146,8 @@ void callbackDispatcher() {
               notificationService,
             );
 
-            // 3. Meal Reminder Logic (WorkManager approach)
-            await _checkAndSendMealReminder(prefs, notificationService);
+            // 3. Meal Reminder Logic (Disabled: Using exact scheduling instead)
+            // await _checkAndSendMealReminder(prefs, notificationService);
           }
         }
       }
@@ -231,49 +229,8 @@ Future<void> _checkAndSendPendingReminder(
   }
 }
 
-Future<void> _checkAndSendMealReminder(
-  SharedPreferences prefs,
-  LocalNotificationService notificationService,
-) async {
-  final now = DateTime.now();
-  final String today = "${now.year}-${now.month}-${now.day}";
-
-  // Breakfast: 7 AM - 10 AM
-  if (now.hour >= 7 && now.hour < 10) {
-    if (prefs.getString('last_breakfast_date') != today) {
-      await notificationService.showNotification(
-        id: 101,
-        title: 'Good Morning!',
-        body: 'Breakfast is ready. Start your day with a healthy meal!',
-      );
-      await prefs.setString('last_breakfast_date', today);
-    }
-  }
-
-  // Lunch: 12 PM - 3 PM
-  if (now.hour >= 12 && now.hour < 15) {
-    if (prefs.getString('last_lunch_date') != today) {
-      await notificationService.showNotification(
-        id: 102,
-        title: 'Lunch Time!',
-        body: 'Lunch is being served. Check out today\'s menu.',
-      );
-      await prefs.setString('last_lunch_date', today);
-    }
-  }
-
-  // Dinner: 7 PM - 10 PM
-  if (now.hour >= 19 && now.hour < 22) {
-    if (prefs.getString('last_dinner_date') != today) {
-      await notificationService.showNotification(
-        id: 103,
-        title: 'Dinner Time!',
-        body: 'Dinner is ready. Don\'t miss it!',
-      );
-      await prefs.setString('last_dinner_date', today);
-    }
-  }
-}
+// 3. Meal Reminder Logic (Disabled: Using exact scheduling instead)
+// Future<void> _checkAndSendMealReminder(...) removed as it is now redundant.
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

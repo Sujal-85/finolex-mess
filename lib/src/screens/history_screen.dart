@@ -10,6 +10,8 @@ import '../models/transaction.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/profile_style_header.dart';
+import 'receipt_preview_screen.dart';
+import '../services/local_notification_service.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -133,14 +135,44 @@ class _HistoryScreenState extends State<HistoryScreen>
     });
   }
 
-  void _downloadReceipt(Transaction transaction) {
-    // In a real app, this would download the receipt
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Receipt downloaded successfully'),
-        backgroundColor: AppColors.success,
-      ),
-    );
+  Future<void> _downloadReceipt(Transaction transaction) async {
+    try {
+      final user = await _authService.getUser();
+      if (user != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Saving Receipt...')));
+        }
+        await ReceiptService().saveReceiptFile(transaction, user);
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Receipt saved to Downloads/Finolex Receipts'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+
+        // Show Local Notification
+        await LocalNotificationService().showNotification(
+          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          title: 'Receipt Downloaded',
+          body: 'Receipt saved successfully.',
+        );
+      }
+    } catch (e) {
+      debugPrint('Error downloading: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   void _openReceipt(Transaction transaction) {
@@ -148,8 +180,9 @@ class _HistoryScreenState extends State<HistoryScreen>
       context: context,
       useRootNavigator: true,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
-        return ReceiptModal(transaction: transaction);
+        return ReceiptPreviewScreen(transaction: transaction);
       },
     );
   }
@@ -752,12 +785,12 @@ class _ReceiptModalState extends State<ReceiptModal> {
       final user = await authService.getUser();
       if (user != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Generating Receipt...')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Saving Receipt...')));
         }
 
-        await receiptService.generateAndDownloadReceipt(
+        final file = await receiptService.saveReceiptFile(
           widget.transaction,
           user,
         );
@@ -765,8 +798,8 @@ class _ReceiptModalState extends State<ReceiptModal> {
         if (mounted) {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Receipt Downloaded!'),
+            SnackBar(
+              content: Text('Receipt saved to ${file.path}'),
               backgroundColor: AppColors.success,
             ),
           );
