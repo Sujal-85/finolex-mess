@@ -11,6 +11,8 @@ import '../services/cloudinary_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/payment_service.dart';
 import '../services/api_service.dart';
+import '../utils/image_helper.dart';
+import 'dart:io';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -264,35 +266,41 @@ class _ProfileScreenState extends State<ProfileScreen>
       );
 
       if (image != null) {
-        setState(() => _isLoading = true);
+        final croppedFile = await ImageHelper.cropImage(File(image.path));
+        if (croppedFile != null) {
+          final XFile finalImage = XFile(croppedFile.path);
+          setState(() => _isLoading = true);
 
-        // Upload to Cloudinary
-        final String? imageUrl = await _cloudinaryService.uploadImage(image);
+          // Upload to Cloudinary
+          final String? imageUrl = await _cloudinaryService.uploadImage(
+            finalImage,
+          );
 
-        if (imageUrl != null) {
-          final user = await _authService.getUser();
-          if (user != null && user['id'] != null) {
-            // Update user profile with new image URL
-            final result = await _authService.updateProfile(user['id'], {
-              'profileImage': imageUrl,
-            });
+          if (imageUrl != null) {
+            final user = await _authService.getUser();
+            if (user != null && user['id'] != null) {
+              // Update user profile with new image URL
+              final result = await _authService.updateProfile(user['id'], {
+                'profileImage': imageUrl,
+              });
 
-            if (result['success']) {
-              await _loadUser(); // Refresh UI
-              if (mounted) {
-                // ScaffoldMessenger.of(context).showSnackBar(
-                //   SnackBar(
-                //     content: Text('Profile picture updated successfully'),
-                //     backgroundColor: Colors.green,
-                //   ),
-                // );
+              if (result['success']) {
+                await _loadUser(); // Refresh UI
+                if (mounted) {
+                  // ScaffoldMessenger.of(context).showSnackBar(
+                  //   SnackBar(
+                  //     content: Text('Profile picture updated successfully'),
+                  //     backgroundColor: Colors.green,
+                  //   ),
+                  // );
+                }
+              } else {
+                throw Exception(result['message']);
               }
-            } else {
-              throw Exception(result['message']);
             }
+          } else {
+            throw Exception('Failed to upload image');
           }
-        } else {
-          throw Exception('Failed to upload image');
         }
       }
     } catch (e) {
@@ -1109,83 +1117,199 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _showContactDialog(String title, String name, String phone) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          title,
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
         ),
-        content: Column(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              name,
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondaryLight.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.phone, size: 18, color: AppColors.primary),
-                const SizedBox(width: 8),
-                Text(phone, style: GoogleFonts.roboto(fontSize: 16)),
-              ],
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary(context),
+              ),
             ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: NeumorphicStyle.cardDecoration(
+                context,
+                borderRadius: 20,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary(context),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () {
+                      _launchDialer(phone);
+                      Navigator.pop(context);
+                    },
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.phone,
+                            size: 20,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          phone,
+                          style: GoogleFonts.roboto(
+                            fontSize: 16,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  _launchDialer(phone);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'Call Now',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-          TextButton(
-            onPressed: () {
-              _launchDialer(phone);
-              Navigator.pop(context);
-            },
-            child: const Text('Call'),
-          ),
-        ],
       ),
     );
   }
 
   void _showWardenDialog() {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Warden Info',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildWardenItem(
-              'Head Warden',
-              'Mr. Vidyasheel Bagde',
-              '+919823123845',
-            ),
-            const Divider(),
-            _buildWardenItem('Boys Warden', 'Mr. Sharma', '+918619664663'),
-            const Divider(),
-            _buildWardenItem(
-              'Girls Warden',
-              'Ms. Sankareshwari',
-              '+919423297439',
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
           ),
-        ],
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondaryLight.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.admin_panel_settings_outlined,
+                      color: AppColors.primary,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Warden Info',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  children: [
+                    _buildWardenItem(
+                      'Head Warden',
+                      'Mr. Vidyasheel Bagde',
+                      '+919823123845',
+                    ),
+                    const Divider(height: 32),
+                    _buildWardenItem(
+                      'Boys Warden',
+                      'Mr. Sharma',
+                      '+918619664663',
+                    ),
+                    const Divider(height: 32),
+                    _buildWardenItem(
+                      'Girls Warden',
+                      'Ms. Sankareshwari',
+                      '+919423297439',
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1234,67 +1358,123 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   void _showDeveloperDialog() {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Developer Info',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircleAvatar(
-              radius: 40,
-              backgroundImage: AssetImage('assets/images/profile.png'),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Sujal Sadanand Khedekar',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textSecondaryLight.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-            Text(
-              'Lead Developer & Creator',
-              style: GoogleFonts.poppins(
-                color: AppColors.textSecondaryLight,
-                fontSize: 12,
+              const SizedBox(height: 24),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.surface(context),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.2),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const CircleAvatar(
+                    radius: 45,
+                    backgroundImage: AssetImage('assets/images/profile.png'),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
-            _buildDeveloperLink(
-              Icons.phone,
-              '9359742537',
-              () => _launchDialer('9359742537'),
-            ),
-            _buildDeveloperLink(
-              Icons.email,
-              'khedekarsujay720@gmail.com',
-              () => _launchEmail('khedekarsujay720@gmail.com'),
-            ),
-            _buildDeveloperLink(
-              Icons.link,
-              'GitHub Profile',
-              () => _launchUrl('https://github.com/Sujal-85'),
-            ),
-            _buildDeveloperLink(
-              Icons.work,
-              'LinkedIn Profile',
-              () => _launchUrl(
-                'https://www.linkedin.com/in/sujal-khedekar-a82b05293/',
+              const SizedBox(height: 16),
+              Text(
+                'Sujal Sadanand Khedekar',
+                style: GoogleFonts.poppins(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary(context),
+                ),
+                textAlign: TextAlign.center,
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Lead Developer & Creator',
+                  style: GoogleFonts.poppins(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: NeumorphicStyle.cardDecoration(
+                  context,
+                  borderRadius: 20,
+                ),
+                child: Column(
+                  children: [
+                    _buildDeveloperLink(
+                      Icons.phone,
+                      '9359742537',
+                      () => _launchDialer('9359742537'),
+                    ),
+                    const Divider(height: 24),
+                    _buildDeveloperLink(
+                      Icons.email,
+                      'khedekarsujay720@gmail.com',
+                      () => _launchEmail('khedekarsujay720@gmail.com'),
+                    ),
+                    const Divider(height: 24),
+                    _buildDeveloperLink(
+                      Icons.link,
+                      'GitHub Profile',
+                      () => _launchUrl('https://github.com/Sujal-85'),
+                    ),
+                    const Divider(height: 24),
+                    _buildDeveloperLink(
+                      Icons.work,
+                      'LinkedIn Profile',
+                      () => _launchUrl(
+                        'https://www.linkedin.com/in/sujal-khedekar-a82b05293/',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

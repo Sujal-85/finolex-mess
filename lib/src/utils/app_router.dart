@@ -83,9 +83,7 @@ class AppRouter {
         path: '/receipt-preview',
         pageBuilder: (context, state) => AppAnimations.transitionPage(
           key: state.pageKey,
-          child: ReceiptPreviewScreen(
-            receiptData: state.extra as Map<String, dynamic>? ?? {},
-          ),
+          child: ReceiptPreviewScreen(transaction: state.extra as dynamic),
         ),
       ),
 

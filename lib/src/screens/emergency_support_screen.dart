@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 import '../widgets/profile_style_header.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+import '../theme/app_constants.dart';
+
 class EmergencySupportScreen extends StatefulWidget {
   const EmergencySupportScreen({super.key});
 
@@ -11,31 +14,30 @@ class EmergencySupportScreen extends StatefulWidget {
 }
 
 class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
-  void _callWarden() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Calling Warden...'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      if (!await launchUrl(launchUri)) {
+        throw Exception('Could not launch $launchUri');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not launch dialer'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  void _callSecurity() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Calling Security...'),
-        backgroundColor: Colors.redAccent,
-      ),
-    );
+  void _callHeadWarden() {
+    _makePhoneCall(AppConstants.headWardenPhone);
   }
 
-  void _callMedicalHelp() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Calling Medical Help...'),
-        backgroundColor: Colors.orangeAccent,
-      ),
-    );
+  void _callMessContractor() {
+    _makePhoneCall(AppConstants.messContractorPhone);
   }
 
   @override
@@ -73,31 +75,22 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
     return Column(
       children: [
         _buildEmergencyButton(
-          icon: Icons.phone_outlined,
-          title: 'Call Warden',
-          subtitle: 'Hostel authority contact',
+          icon: Icons.admin_panel_settings_outlined,
+          title: 'Call Head Warden',
+          subtitle: 'Hostel Authority',
           iconColor: AppColors.primary,
           // Using a subtle background for the icon container instead of solid color blocks
           iconBgColor: AppColors.primary.withOpacity(0.1),
-          onTap: _callWarden,
+          onTap: _callHeadWarden,
         ),
         const SizedBox(height: 16),
         _buildEmergencyButton(
-          icon: Icons.shield_outlined,
-          title: 'Call Security',
-          subtitle: 'Campus security team',
-          iconColor: Colors.redAccent,
-          iconBgColor: Colors.redAccent.withOpacity(0.1),
-          onTap: _callSecurity,
-        ),
-        const SizedBox(height: 16),
-        _buildEmergencyButton(
-          icon: Icons.local_hospital_outlined,
-          title: 'Medical Help',
-          subtitle: 'Emergency medical assistance',
-          iconColor: Colors.orangeAccent,
-          iconBgColor: Colors.orangeAccent.withOpacity(0.1),
-          onTap: _callMedicalHelp,
+          icon: Icons.person_outline,
+          title: 'Call Mess Contractor',
+          subtitle: 'Food & Service Queries',
+          iconColor: Colors.orange,
+          iconBgColor: Colors.orange.withOpacity(0.1),
+          onTap: _callMessContractor,
         ),
       ],
     );

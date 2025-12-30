@@ -5,8 +5,9 @@ import '../services/payment_service.dart';
 import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import '../widgets/profile_style_header.dart';
-import 'history_screen.dart'; // Reuse ReceiptModal
+import 'receipt_preview_screen.dart';
 import '../services/receipt_service.dart';
+import '../services/local_notification_service.dart';
 import '../models/transaction.dart';
 import '../widgets/receipt_card.dart';
 
@@ -124,16 +125,30 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen> {
       final user = await _authService.getUser();
       if (user == null) return;
 
-      await _receiptService.generateAndDownloadReceipt(transaction, user);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Saving Receipt...')));
+      }
+
+      final file = await _receiptService.saveReceiptFile(transaction, user);
 
       if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Receipt downloaded successfully'),
+          SnackBar(
+            content: Text('Receipt saved Successfully'),
             backgroundColor: AppColors.success,
           ),
         );
       }
+
+      // Show Local Notification
+      await LocalNotificationService().showNotification(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title: 'Receipt Downloaded',
+        body: 'Receipt saved successfully.',
+      );
     } catch (e) {
       debugPrint(e.toString());
       if (mounted) {
@@ -145,6 +160,34 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _shareReceipt(Transaction transaction) async {
+    try {
+      final user = await _authService.getUser();
+      if (user == null) return;
+      await _receiptService.shareReceipt(transaction, user);
+    } catch (e) {
+      debugPrint('Error sharing receipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _viewReceipt(Transaction transaction) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ReceiptPreviewScreen(transaction: transaction),
+    );
   }
 
   @override
@@ -167,16 +210,8 @@ class _AllReceiptsScreenState extends State<AllReceiptsScreen> {
                       return ReceiptCard(
                         transaction: transaction,
                         onDownload: () => _downloadReceipt(transaction),
-                        onShare: () => _downloadReceipt(transaction),
-                        onView: () {
-                          showModalBottomSheet(
-                            context: context,
-                            useRootNavigator: true,
-                            isScrollControlled: true,
-                            builder: (context) =>
-                                ReceiptModal(transaction: transaction),
-                          );
-                        },
+                        onShare: () => _shareReceipt(transaction),
+                        onView: () => _viewReceipt(transaction),
                       );
                     },
                   ),

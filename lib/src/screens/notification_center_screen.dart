@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/notification_model.dart';
 import '../services/notification_service.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/empty_state.dart';
@@ -101,6 +102,26 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
       showBackButton: true,
       onBackTap: () => context.pop(),
       actions: [
+        IconButton(
+          onPressed: () {
+            notificationService.markAllAsRead();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'All notifications marked as read',
+                  style: GoogleFonts.poppins(),
+                ),
+                backgroundColor: AppColors.primary,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+          },
+          icon: const Icon(Icons.done_all, color: Colors.white, size: 24),
+          tooltip: 'Mark all as read',
+        ),
         IconButton(
           onPressed: () {
             context.push('/settings');
@@ -210,14 +231,23 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
   }
 
   String _getDateGroup(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
+    // Convert both to IST for accurate "Today" classification in India context
+    final istLocation = tz.getLocation('Asia/Kolkata');
+    final nowIst = tz.TZDateTime.now(istLocation);
+    final dateIst = tz.TZDateTime.from(date, istLocation);
 
-    if (difference.inDays == 0) {
+    final difference = nowIst.difference(dateIst);
+    final yesterdayIst = nowIst.subtract(const Duration(days: 1));
+
+    if (nowIst.year == dateIst.year &&
+        nowIst.month == dateIst.month &&
+        nowIst.day == dateIst.day) {
       return 'Today';
-    } else if (difference.inDays == 1) {
+    } else if (yesterdayIst.year == dateIst.year &&
+        yesterdayIst.month == dateIst.month &&
+        yesterdayIst.day == dateIst.day) {
       return 'Yesterday';
-    } else if (difference.inDays <= 7) {
+    } else if (difference.inDays < 7) {
       return 'This Week';
     } else {
       return 'Older';
@@ -436,8 +466,12 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
   }
 
   String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
+    // Convert to IST for display
+    final istLocation = tz.getLocation('Asia/Kolkata');
+    final nowIst = tz.TZDateTime.now(istLocation);
+    final timeIst = tz.TZDateTime.from(time, istLocation);
+
+    final difference = nowIst.difference(timeIst);
 
     if (difference.inMinutes < 1) {
       return 'Just now';
@@ -448,7 +482,7 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
     } else if (difference.inDays < 7) {
       return '${difference.inDays}d ago';
     } else {
-      return '${time.day}/${time.month}/${time.year}';
+      return '${timeIst.day}/${timeIst.month}/${timeIst.year}';
     }
   }
 }
