@@ -83,13 +83,18 @@ class MenuCard extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        const Spacer(),
-        Text(
-          item,
-          style: GoogleFonts.roboto(
-            fontSize: 12,
-            color: AppColors.textPrimary(context),
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            item,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.roboto(
+              fontSize: 12,
+              color: AppColors.textPrimary(context),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

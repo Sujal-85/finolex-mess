@@ -145,13 +145,32 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       }
 
       double messFee = 3500.0;
+      DateTime? planStartDate;
+      DateTime? planEndDate;
       try {
         final planResponse = await api.get('/plans');
         if (planResponse.statusCode == 200 && planResponse.data != null) {
           messFee = (planResponse.data['price'] ?? 3500).toDouble();
+          if (planResponse.data['startDate'] != null) {
+            planStartDate = DateTime.parse(
+              planResponse.data['startDate'],
+            ).toLocal();
+          }
+          if (planResponse.data['endDate'] != null) {
+            planEndDate = DateTime.parse(
+              planResponse.data['endDate'],
+            ).toLocal();
+          }
+          print(
+            '[DashboardBloc] Plan Loaded: ID=${planResponse.data['_id']}, Fee=$messFee, Start=$planStartDate, End=$planEndDate',
+          );
+        } else {
+          print(
+            '[DashboardBloc] Plan Response error or empty: ${planResponse.statusCode}, Data: ${planResponse.data}',
+          );
         }
       } catch (e) {
-        print('Error fetching plan: $e');
+        print('[DashboardBloc] Error fetching plan: $e');
       }
 
       // Adjust balance to include 'Completed' transactions which are legacy/unsynced
@@ -160,15 +179,34 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       // Check if total dues are cleared
       // Assuming messFee is the total fee
 
-      // Payment Fields extraction
-      // Frontend Logic: If user has paid Mess Fee, explicitly ignore backend fine.
-      // This ensures "All Paid" is shown correctly even if backend is slightly out of sync.
-      double fineAmount = (user?['fineAmount'] ?? 0).toDouble();
+      // Dynamic Fine Calculation: ₹5 per day past the 8th day
+      double fineAmount = 0.0;
+      if (planStartDate != null) {
+        final eighthDay = planStartDate.add(const Duration(days: 7));
+        final now = DateTime.now();
+
+        if (now.isAfter(eighthDay)) {
+          // Calculate difference in days (start of day to start of day for consistency)
+          final today = DateTime(now.year, now.month, now.day);
+          final due = DateTime(eighthDay.year, eighthDay.month, eighthDay.day);
+          final diffDays = today.difference(due).inDays;
+
+          if (diffDays > 0) {
+            fineAmount = diffDays * 5.0;
+          }
+        }
+      } else {
+        // Fallback to backend value if no plan dates found
+        fineAmount = (user?['fineAmount'] ?? 0).toDouble();
+      }
+
       if (adjustedBalance >= messFee) {
         fineAmount = 0.0;
       }
       DateTime? paymentDueDate;
-      if (user?['paymentDueDate'] != null) {
+      if (planStartDate != null) {
+        paymentDueDate = planStartDate.add(const Duration(days: 7));
+      } else if (user?['paymentDueDate'] != null) {
         paymentDueDate = DateTime.parse(user!['paymentDueDate']).toLocal();
       }
 
@@ -191,6 +229,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           fineAmount: fineAmount,
           paymentDueDate: paymentDueDate,
           messFee: messFee,
+          planStartDate: planStartDate,
+          planEndDate: planEndDate,
         ),
       );
     } catch (e) {

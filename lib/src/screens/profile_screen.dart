@@ -6,13 +6,11 @@ import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/shimmer_effect.dart';
 import '../widgets/dialogs/plan_details_dialog.dart';
-import '../widgets/dashboard/payment_due_card.dart';
 import '../services/auth_service.dart';
 import '../services/cloudinary_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/payment_service.dart';
 import '../services/api_service.dart';
-import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -26,6 +24,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late AnimationController _payButtonController;
+  late Animation<double> _payButtonAnimation;
 
   final AuthService _authService = AuthService();
   bool _isLoading = true;
@@ -52,6 +52,15 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         );
 
+    _payButtonController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+
+    _payButtonAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _payButtonController, curve: Curves.easeInOut),
+    );
+
     _loadUser();
   }
 
@@ -61,26 +70,28 @@ class _ProfileScreenState extends State<ProfileScreen>
       final user = await _authService.refreshUser();
 
       // Fetch Plan (Prioritize usage from user object if available, as backend now provides it)
-      double messFee = 3500.0;
+      double messFee = 0.0;
+      bool planFetched = false;
 
-      if (user != null && user['monthlyFee'] != null) {
+      try {
+        debugPrint('fetching plan from api...');
+        final api = ApiService();
+        final planResponse = await api.get('/plans');
+        debugPrint('Plan Response Status: ${planResponse.statusCode}');
+        debugPrint('Plan Response Data: ${planResponse.data}');
+
+        if (planResponse.statusCode == 200 && planResponse.data != null) {
+          messFee = (planResponse.data['price'] ?? 0).toDouble();
+          planFetched = true;
+          debugPrint('Set messFee from API to: $messFee');
+        }
+      } catch (e) {
+        debugPrint('Error fetching plan: $e');
+      }
+
+      if (!planFetched && user != null && user['monthlyFee'] != null) {
         messFee = (user['monthlyFee'] as num).toDouble();
         debugPrint('Set messFee from user object: $messFee');
-      } else {
-        try {
-          debugPrint('fetching plan from api...');
-          final api = ApiService();
-          final planResponse = await api.get('/plans');
-          debugPrint('Plan Response Status: ${planResponse.statusCode}');
-          debugPrint('Plan Response Data: ${planResponse.data}');
-
-          if (planResponse.statusCode == 200 && planResponse.data != null) {
-            messFee = (planResponse.data['price'] ?? 3500).toDouble();
-            debugPrint('Set messFee from API to: $messFee');
-          }
-        } catch (e) {
-          debugPrint('Error fetching plan: $e');
-        }
       }
 
       if (user != null) {
@@ -187,6 +198,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void dispose() {
     _animationController.dispose();
+    _payButtonController.dispose();
     super.dispose();
   }
 
@@ -315,12 +327,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     context.push('/all-receipts');
   }
 
-  void _contactSupport() {
-    context.push('/emergency');
-  }
-
   void _rechargeWallet() {
     context.push('/payment');
+  }
+
+  void _viewRules() {
+    context.push('/mess-rules');
   }
 
   void _logout() {
@@ -393,6 +405,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                           // Information cards
                           _buildInformationCards(),
+
+                          const SizedBox(height: 24),
+
+                          // Pay Button
+                          _buildPayButton(),
 
                           const SizedBox(height: 24),
 
@@ -768,6 +785,90 @@ class _ProfileScreenState extends State<ProfileScreen>
     */
   }
 
+  Widget _buildPayButton() {
+    double baseFee = _userProfile?.messFee ?? 3500;
+    double fine = _userProfile?.fineAmount ?? 0;
+    final double currentAmount = _userProfile?.currentBalance ?? 0;
+    final double pendingAmount = _userProfile?.pendingAmount ?? 0;
+
+    // Frontend Logic: If user has paid Base Fee, explicitly ignore backend fine.
+    if (currentAmount >= baseFee) {
+      fine = 0;
+    }
+
+    final double targetAmount = baseFee + fine;
+
+    // Calculate Net Due
+    double netDue = targetAmount - (currentAmount + pendingAmount);
+    if (netDue < 0) netDue = 0;
+
+    return Center(
+      child: Column(
+        children: [
+          ScaleTransition(
+            scale: _payButtonAnimation,
+            child: GestureDetector(
+              onTapDown: (_) => _payButtonController.forward(),
+              onTapUp: (_) {
+                _payButtonController.reverse();
+                context.push('/payment');
+              },
+              onTapCancel: () => _payButtonController.reverse(),
+              child: Container(
+                width: 120, // Slightly larger as requested 'big one'
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary,
+                      AppColors.primary.withValues(alpha: 0.8),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  'Pay',
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Text(
+          //   '₹${baseFee.toStringAsFixed(0)}',
+          //   style: GoogleFonts.poppins(
+          //     fontSize: 32,
+          //     fontWeight: FontWeight.bold,
+          //     color: AppColors.textPrimary(context),
+          //   ),
+          // ),
+          Text(
+            'Click Button to Pay from here!',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: AppColors.textSecondaryLight,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildQuickActions() {
     final actions = [
       QuickAction(
@@ -781,19 +882,39 @@ class _ProfileScreenState extends State<ProfileScreen>
         onTap: _changePassword,
       ),
       QuickAction(
-        icon: Icons.badge_outlined,
-        label: 'Download ID',
-        onTap: _downloadID,
-      ),
-      QuickAction(
         icon: Icons.receipt_outlined,
         label: 'View Receipts',
         onTap: _viewReceipts,
       ),
       QuickAction(
-        icon: Icons.support_agent_outlined,
-        label: 'Contact Support',
-        onTap: _contactSupport,
+        icon: Icons.report_problem_outlined,
+        label: 'Complaints',
+        onTap: () => context.push('/complaints'),
+      ),
+      QuickAction(
+        icon: Icons.feedback_outlined,
+        label: 'Feedback',
+        onTap: () => context.push('/feedback'),
+      ),
+      QuickAction(
+        icon: Icons.calculate_outlined,
+        label: 'Rebate Cal',
+        onTap: () => context.push('/rebate-calculator'),
+      ),
+      QuickAction(
+        icon: Icons.badge_outlined,
+        label: 'Download ID',
+        onTap: _downloadID,
+      ),
+      QuickAction(
+        icon: Icons.gavel_outlined,
+        label: 'Mess Rules',
+        onTap: _viewRules,
+      ),
+      QuickAction(
+        icon: Icons.settings_outlined,
+        label: 'Settings',
+        onTap: () => context.push('/settings'),
       ),
     ];
 

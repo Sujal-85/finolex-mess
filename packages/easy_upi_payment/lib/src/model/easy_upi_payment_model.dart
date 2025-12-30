@@ -7,7 +7,11 @@ class EasyUpiPaymentModel {
     this.payeeMerchantCode,
     this.transactionId,
     this.transactionRefId,
+    this.appPackage,
   });
+
+  /// Android App Package Name (e.g. com.google.android.apps.nbu.paisa.user)
+  final String? appPackage;
 
   /// It takes VPA address of payee for e.g. gaurav.jajoo@upi
   final String payeeVpa;
@@ -38,13 +42,14 @@ class EasyUpiPaymentModel {
     return {
       'payeeVpa': payeeVpa,
       'payeeName': payeeName,
-      'payeeMerchantCode': payeeMerchantCode ?? '',
+      'payeeMerchantCode': payeeMerchantCode,
       'transactionId':
           transactionId ?? DateTime.now().microsecondsSinceEpoch.toString(),
       'transactionRefId':
           transactionRefId ?? DateTime.now().millisecondsSinceEpoch.toString(),
       'description': description,
-      'amount': amount.toString(),
+      'amount': amount.toStringAsFixed(2),
+      'appPackage': appPackage,
     };
   }
 }

@@ -97,6 +97,17 @@ router.put('/update-status', async (req, res) => {
 
                         title = 'Payment Done Thank You! 🎉';
                         description = 'Payment is done thank you. Your mess fees are fully paid.';
+
+                        // CLEANUP: Remove "Pending Payment" and "Fine" notifications
+                        try {
+                            await Notification.deleteMany({
+                                userId: student._id,
+                                title: { $in: ['Payment Pending ⚠️', 'Daily Fine Applied'] }
+                            });
+                            console.log(`Removed stale notifications for ${student.name}`);
+                        } catch (err) {
+                            console.error('Error removing stale notifications:', err);
+                        }
                     } else {
                         student.paymentStatus = 'pending'; // Still pending if partial
                     }

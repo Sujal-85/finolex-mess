@@ -18,12 +18,17 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 // import 'firebase_options.dart'; // Ensure this file exists, otherwise just default if checking platform
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.playIntegrity,
+    appleProvider: AppleProvider.deviceCheck,
+  );
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -45,7 +50,7 @@ Future<void> _initNotifications() async {
   try {
     await FirebaseApi().initNotifications();
     final notificationService = LocalNotificationService();
-    await notificationService.init();
+    await notificationService.init(requestPermission: false);
 
     // Initialize WorkManager
     await Workmanager().initialize(
@@ -61,7 +66,8 @@ Future<void> _initNotifications() async {
       constraints: Constraints(networkType: NetworkType.connected),
     );
 
-    // Schedule Daily Meal Reminders
+    // Schedule Daily Meal Reminders (Moved to WorkManager for robustness as requested)
+    /*
     await notificationService.scheduleDailyNotification(
       id: 1,
       title: 'Good Morning!',
@@ -85,6 +91,7 @@ Future<void> _initNotifications() async {
       hour: 19,
       minute: 30,
     );
+    */
   } catch (e) {
     debugPrint('Error initializing notifications: $e');
   }
@@ -97,7 +104,7 @@ void callbackDispatcher() {
       if (task == 'fetchNotificationsTask') {
         // Initialize dependencies for background isolate
         final notificationService = LocalNotificationService();
-        await notificationService.init();
+        await notificationService.init(requestPermission: false);
 
         final prefs = await SharedPreferences.getInstance();
         final userStr = prefs.getString('auth_user');
@@ -140,6 +147,9 @@ void callbackDispatcher() {
               prefs,
               notificationService,
             );
+
+            // 3. Meal Reminder Logic (WorkManager approach)
+            await _checkAndSendMealReminder(prefs, notificationService);
           }
         }
       }
@@ -169,7 +179,6 @@ Future<void> _checkAndSendPendingReminder(
     }
 
     if (dailyCount >= 2) {
-      debugPrint('Daily pending reminder limit reached.');
       return;
     }
 
@@ -177,48 +186,92 @@ Future<void> _checkAndSendPendingReminder(
     final response = await ApiService().get('/students/$studentId');
     if (response.statusCode == 200) {
       final student = response.data;
+
+      // 1. Strict Payment Status Check
+      final String paymentStatus = (student['paymentStatus'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (paymentStatus == 'paid') {
+        return; // Stop immediately if status is explicitly paid
+      }
+
       final double balance = (student['balance'] ?? 0).toDouble();
-      // Assuming monthlyFee is around 3500 usually, but we should rely on what constitutes "Pending"
-      // If student has paymentStatus = 'pending' or calculated dues > 0
-      // Let's use the logic from payments.js:
-      // totalFee = (monthlyFee || 3500) + (fineAmount || 0)
-      // remainingDues = totalFee - balance
       final double monthlyFee = (student['monthlyFee'] ?? 3500).toDouble();
       final double fineAmount = (student['fineAmount'] ?? 0).toDouble();
       double totalFee = monthlyFee + fineAmount;
 
-      // Strict Frontend Check: If balance covers base fee, ignore fine
       if (balance >= monthlyFee) {
-        totalFee = monthlyFee; // effective total is just base
+        totalFee = monthlyFee;
       }
 
       final double remainingDues = totalFee > balance ? totalFee - balance : 0;
 
-      if (remainingDues > 0 && student['paymentStatus'] != 'paid') {
-        // Send Reminder
+      // 2. Tolerance Check (ignore < ₹1) & Status Re-verification
+      if (remainingDues > 1.0 && paymentStatus != 'paid') {
         final List<String> messages = [
           'Reminder: You have pending due of ₹$remainingDues. Please pay soon!',
           'Don\'t forget to clear your canteen dues of ₹$remainingDues.',
           'Pending Payment Alert: ₹$remainingDues remaining. Avoid late fees!',
-          'Hey! Just a friendly reminder to settle your mess fees.',
-          'Your canteen fee of ₹$remainingDues is pending. Pay now to enjoy uninterrupted meals.',
         ];
 
         final random = Random();
         final String message = messages[random.nextInt(messages.length)];
 
         await notificationService.showNotification(
-          id: 999, // Fixed ID for pending reminder or unique? Let's keep it unique enough or Fixed to avoid stacking
+          id: 999,
           title: 'Pending Payment ⚠️',
           body: message,
         );
 
-        // Update limit counters
         await prefs.setInt('daily_pending_reminder_count', dailyCount + 1);
       }
     }
   } catch (e) {
     debugPrint('Error in pending reminder check: $e');
+  }
+}
+
+Future<void> _checkAndSendMealReminder(
+  SharedPreferences prefs,
+  LocalNotificationService notificationService,
+) async {
+  final now = DateTime.now();
+  final String today = "${now.year}-${now.month}-${now.day}";
+
+  // Breakfast: 7 AM - 10 AM
+  if (now.hour >= 7 && now.hour < 10) {
+    if (prefs.getString('last_breakfast_date') != today) {
+      await notificationService.showNotification(
+        id: 101,
+        title: 'Good Morning!',
+        body: 'Breakfast is ready. Start your day with a healthy meal!',
+      );
+      await prefs.setString('last_breakfast_date', today);
+    }
+  }
+
+  // Lunch: 12 PM - 3 PM
+  if (now.hour >= 12 && now.hour < 15) {
+    if (prefs.getString('last_lunch_date') != today) {
+      await notificationService.showNotification(
+        id: 102,
+        title: 'Lunch Time!',
+        body: 'Lunch is being served. Check out today\'s menu.',
+      );
+      await prefs.setString('last_lunch_date', today);
+    }
+  }
+
+  // Dinner: 7 PM - 10 PM
+  if (now.hour >= 19 && now.hour < 22) {
+    if (prefs.getString('last_dinner_date') != today) {
+      await notificationService.showNotification(
+        id: 103,
+        title: 'Dinner Time!',
+        body: 'Dinner is ready. Don\'t miss it!',
+      );
+      await prefs.setString('last_dinner_date', today);
+    }
   }
 }
 

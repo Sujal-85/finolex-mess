@@ -12,7 +12,6 @@ class EmergencySupportScreen extends StatefulWidget {
 
 class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
   void _callWarden() {
-    // In a real app, this would initiate a phone call
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Calling Warden...'),
@@ -22,21 +21,19 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
   }
 
   void _callSecurity() {
-    // In a real app, this would initiate a phone call
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Calling Security...'),
-        backgroundColor: Colors.red,
+        backgroundColor: Colors.redAccent,
       ),
     );
   }
 
   void _callMedicalHelp() {
-    // In a real app, this would initiate a phone call
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Calling Medical Help...'),
-        backgroundColor: Colors.orange,
+        backgroundColor: Colors.orangeAccent,
       ),
     );
   }
@@ -48,30 +45,19 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             const ProfileStyleHeader(title: 'Emergency Support'),
-
-            // Content
             Expanded(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 24,
+                ),
                 child: Column(
                   children: [
-                    const SizedBox(height: 24),
-
-                    // Critical Action Buttons
                     _buildCriticalActionButtons(),
-
                     const SizedBox(height: 24),
-
-                    // Campus Map Card
-                    _buildCampusMapCard(),
-
-                    const SizedBox(height: 24),
-
-                    // Additional Info
                     _buildAdditionalInfo(),
-
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -84,40 +70,36 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
   }
 
   Widget _buildCriticalActionButtons() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          // Call Warden Button
-          _buildEmergencyButton(
-            icon: Icons.phone_outlined,
-            title: 'Call Warden',
-            subtitle: 'Hostel authority contact',
-            color: AppColors.primary,
-            onTap: _callWarden,
-          ),
-          const SizedBox(height: 16),
-
-          // Call Security Button
-          _buildEmergencyButton(
-            icon: Icons.shield_outlined,
-            title: 'Call Security',
-            subtitle: 'Campus security team',
-            color: Colors.red,
-            onTap: _callSecurity,
-          ),
-          const SizedBox(height: 16),
-
-          // Medical Help Button
-          _buildEmergencyButton(
-            icon: Icons.local_hospital_outlined,
-            title: 'Medical Help',
-            subtitle: 'Emergency medical assistance',
-            color: Colors.orange,
-            onTap: _callMedicalHelp,
-          ),
-        ],
-      ),
+    return Column(
+      children: [
+        _buildEmergencyButton(
+          icon: Icons.phone_outlined,
+          title: 'Call Warden',
+          subtitle: 'Hostel authority contact',
+          iconColor: AppColors.primary,
+          // Using a subtle background for the icon container instead of solid color blocks
+          iconBgColor: AppColors.primary.withOpacity(0.1),
+          onTap: _callWarden,
+        ),
+        const SizedBox(height: 16),
+        _buildEmergencyButton(
+          icon: Icons.shield_outlined,
+          title: 'Call Security',
+          subtitle: 'Campus security team',
+          iconColor: Colors.redAccent,
+          iconBgColor: Colors.redAccent.withOpacity(0.1),
+          onTap: _callSecurity,
+        ),
+        const SizedBox(height: 16),
+        _buildEmergencyButton(
+          icon: Icons.local_hospital_outlined,
+          title: 'Medical Help',
+          subtitle: 'Emergency medical assistance',
+          iconColor: Colors.orangeAccent,
+          iconBgColor: Colors.orangeAccent.withOpacity(0.1),
+          onTap: _callMedicalHelp,
+        ),
+      ],
     );
   }
 
@@ -125,40 +107,39 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
     required IconData icon,
     required String title,
     required String subtitle,
-    required Color color,
+    required Color iconColor,
+    required Color iconBgColor,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+          ),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
-            ),
-            BoxShadow(
-              color: Colors.white.withOpacity(0.8),
-              blurRadius: 15,
-              offset: const Offset(-8, -8),
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              width: 50,
-              height: 50,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color.withOpacity(0.1),
+                color: iconBgColor,
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: color, size: 24),
+              child: Icon(icon, color: iconColor, size: 28),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -168,25 +149,33 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
                   Text(
                     title,
                     style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary(context),
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
+                      fontSize: 13,
                       color: AppColors.textSecondaryLight,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              color: AppColors.textSecondaryLight,
-              size: 16,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white10 : Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: AppColors.textSecondaryLight,
+                size: 14,
+              ),
             ),
           ],
         ),
@@ -194,139 +183,21 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
     );
   }
 
-  Widget _buildCampusMapCard() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Colors.white.withOpacity(0.8),
-            blurRadius: 15,
-            offset: const Offset(-8, -8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Campus Map',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.grey[300]!),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.map_outlined, size: 48, color: Colors.grey[600]),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Campus Map Preview',
-                    style: GoogleFonts.poppins(
-                      color: Colors.grey[600],
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Hostel Block',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                // In a real app, this would open a full map
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Opening full campus map...'),
-                    backgroundColor: AppColors.primary,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                elevation: 0,
-              ),
-              child: Text(
-                'Open Map',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAdditionalInfo() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface(context),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Colors.white.withOpacity(0.8),
-            blurRadius: 15,
-            offset: const Offset(-8, -8),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -336,72 +207,76 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
           Text(
             'Important Contacts',
             style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
               color: AppColors.textPrimary(context),
             ),
           ),
-          const SizedBox(height: 16),
-          _buildContactInfo('Ambulance', '108'),
-          const Divider(height: 24),
-          _buildContactInfo('Police', '100'),
-          const Divider(height: 24),
-          _buildContactInfo('Fire Station', '101'),
-          const Divider(height: 24),
-          _buildContactInfo('Women Helpline', '1091'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+          _buildContactInfo(
+            'Ambulance',
+            '108',
+            Icons.medical_services_outlined,
+          ),
+          const CustomDivider(),
+          _buildContactInfo('Police', '100', Icons.local_police_outlined),
+          const CustomDivider(),
+          _buildContactInfo('Fire Station', '101', Icons.fire_truck_outlined),
+          const CustomDivider(),
+          _buildContactInfo('Women Helpline', '1091', Icons.support_agent),
+          const SizedBox(height: 28),
           Text(
             'Safety Tips',
             style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
               color: AppColors.textPrimary(context),
             ),
           ),
           const SizedBox(height: 16),
           _buildSafetyTip('Always carry your ID card'),
-          _buildSafetyTip('Report suspicious activity immediately'),
-          _buildSafetyTip('Know the location of nearest exits'),
-          _buildSafetyTip('Keep emergency contacts easily accessible'),
-          const SizedBox(height: 24),
-          Text(
-            'Support Availability',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '24/7 Emergency Support Available',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: AppColors.textSecondaryLight,
-            ),
-          ),
+          _buildSafetyTip('Keep contacts accessible'),
+          _buildSafetyTip('Know nearest exits'),
         ],
       ),
     );
   }
 
-  Widget _buildContactInfo(String title, String number) {
+  Widget _buildContactInfo(String title, String number, IconData icon) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            color: AppColors.textPrimary(context),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: AppColors.primary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              color: AppColors.textPrimary(context),
+            ),
           ),
         ),
-        Text(
-          number,
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppColors.primary,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.surface(context),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+          ),
+          child: Text(
+            number,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+            ),
           ),
         ),
       ],
@@ -410,12 +285,11 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
 
   Widget _buildSafetyTip(String tip) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle_outlined, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
+          Icon(Icons.check_circle, size: 16, color: Colors.green),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               tip,
@@ -426,6 +300,23 @@ class _EmergencySupportScreenState extends State<EmergencySupportScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class CustomDivider extends StatelessWidget {
+  const CustomDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Divider(
+        height: 1,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.white10
+            : Colors.grey[200],
       ),
     );
   }

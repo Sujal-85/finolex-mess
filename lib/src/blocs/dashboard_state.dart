@@ -32,6 +32,8 @@ class DashboardLoaded extends DashboardState {
   final String breakfastItem;
   final String lunchItem;
   final String dinnerItem;
+  final DateTime? planStartDate;
+  final DateTime? planEndDate;
 
   const DashboardLoaded({
     required this.balance,
@@ -51,6 +53,8 @@ class DashboardLoaded extends DashboardState {
     this.fineAmount = 0.0,
     this.paymentDueDate,
     this.messFee = 3500.0,
+    this.planStartDate,
+    this.planEndDate,
   });
 
   DashboardLoaded copyWith({
@@ -71,6 +75,8 @@ class DashboardLoaded extends DashboardState {
     double? fineAmount,
     DateTime? paymentDueDate,
     double? messFee,
+    DateTime? planStartDate,
+    DateTime? planEndDate,
   }) {
     return DashboardLoaded(
       balance: balance ?? this.balance,
@@ -90,6 +96,8 @@ class DashboardLoaded extends DashboardState {
       fineAmount: fineAmount ?? this.fineAmount,
       paymentDueDate: paymentDueDate ?? this.paymentDueDate,
       messFee: messFee ?? this.messFee,
+      planStartDate: planStartDate ?? this.planStartDate,
+      planEndDate: planEndDate ?? this.planEndDate,
     );
   }
 
@@ -112,6 +120,8 @@ class DashboardLoaded extends DashboardState {
     fineAmount,
     paymentDueDate,
     messFee,
+    planStartDate,
+    planEndDate,
   ];
 }
 
