@@ -4,16 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:easy_upi_payment/easy_upi_payment.dart';
+import 'package:flutter_upi_india/flutter_upi_india.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import '../services/auth_service.dart';
+
+import 'package:flutter/services.dart';
 import '../services/payment_service.dart';
+
 import '../services/api_service.dart';
 import '../widgets/profile_style_header.dart';
 import '../services/local_notification_service.dart';
+import '../theme/app_constants.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
@@ -37,21 +44,23 @@ class _PaymentScreenState extends State<PaymentScreen>
   Timer? _timer;
   int _timeLeft = 300; // 5 minutes
   int _paymentMethodIndex = 0; // 0: QR Code, 1: UPI ID
-  bool _isUpiVerified = false;
+  bool _receiptConfirmed = false;
 
-  // Services
   // Services
   final AuthService _authService = AuthService();
   final PaymentService _paymentService = PaymentService();
   final ImagePicker _picker = ImagePicker();
+
   Map<String, dynamic>? _user;
 
   double _maxPayable = 3500.0;
+  List<ApplicationMeta>? _apps;
 
   @override
   void initState() {
     super.initState();
     _fetchUser();
+    // Default initial, will update after user fetch
     // Default initial, will update after user fetch
     _amountController.text = _amount.toStringAsFixed(0);
   }
@@ -83,31 +92,53 @@ class _PaymentScreenState extends State<PaymentScreen>
       }
 
       double messFee = 3500.0;
+      DateTime? planStartDate;
       try {
         final api = ApiService();
         final planResponse = await api.get('/plans');
         if (planResponse.statusCode == 200 && planResponse.data != null) {
           messFee = (planResponse.data['price'] ?? 3500).toDouble();
+          if (planResponse.data['startDate'] != null) {
+            planStartDate = DateTime.parse(
+              planResponse.data['startDate'],
+            ).toLocal();
+          }
         }
       } catch (e) {
         debugPrint('Error fetching plan: $e');
       }
 
-      final double fine = (user['fineAmount'] ?? 0).toDouble();
-      // Dashboard Logic: (Fee + Fine) - Balance - Pending
-      // Also apply the same "Ignore Fine if Paid Base" logic from Dashboard
+      double fine = 0.0;
+      if (planStartDate != null) {
+        final eighthDay = planStartDate.add(const Duration(days: 7));
+        final now = DateTime.now();
+        if (now.isAfter(eighthDay)) {
+          final today = DateTime(now.year, now.month, now.day);
+          final due = DateTime(eighthDay.year, eighthDay.month, eighthDay.day);
+          final diffDays = today.difference(due).inDays;
+          if (diffDays > 0) {
+            fine = diffDays * 5.0;
+          }
+        }
+      } else {
+        fine = (user['fineAmount'] ?? 0).toDouble();
+      }
+
+      // Logic: (Fee + Fine) - Balance - Pending
+      // Also apply logic: Ignore fine if base is covered
       double totalFee = messFee + fine;
       if (balance >= messFee) {
         totalFee = messFee; // Ignore fine if base is covered
       }
 
       final double remaining = totalFee - balance - pendingAmount;
-      final double initialAmount = remaining > 0 ? remaining : 0;
 
       setState(() {
         _user = user;
         _maxPayable = remaining > 0 ? remaining : 0;
-        _amount = initialAmount;
+        _amount = remaining > 0
+            ? remaining
+            : 0; // Revert _amount to initialAmount
         _amountController.text = _amount.toStringAsFixed(0);
       });
     }
@@ -117,29 +148,12 @@ class _PaymentScreenState extends State<PaymentScreen>
   void dispose() {
     _amountController.dispose();
     _userUpiController.dispose();
+
     _timer?.cancel();
     super.dispose();
   }
 
   // ... (existing timer methods) ...
-  void _startTimer() {
-    _timeLeft = 300;
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeLeft > 0) {
-        setState(() {
-          _timeLeft--;
-        });
-      } else {
-        timer.cancel();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment session timed out')),
-        );
-        setState(() {
-          _currentStep = 0;
-        });
-      }
-    });
-  }
 
   String _formatTime(int seconds) {
     final minutes = (seconds / 60).floor();
@@ -165,22 +179,6 @@ class _PaymentScreenState extends State<PaymentScreen>
       setState(() {
         _receiptImage = image;
       });
-    }
-  }
-
-  void _verifyUpiId() {
-    if (_userUpiController.text.contains('@') &&
-        _userUpiController.text.length > 3) {
-      setState(() {
-        _isUpiVerified = true;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('UPI ID Verified')));
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Invalid UPI ID format')));
     }
   }
 
@@ -242,68 +240,316 @@ class _PaymentScreenState extends State<PaymentScreen>
         }
       });
     } catch (e) {
-      setState(() {
-        _isProcessing = false;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error submitting payment: $e')));
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error submitting payment: $e')));
+      }
     }
   }
 
-  Future<void> _startUpiPayment({String? appScheme}) async {
-    final transactionId = DateTime.now().millisecondsSinceEpoch.toString();
+  Future<void> _shareQrCode() async {
+    try {
+      final byteData = await rootBundle.load('assets/images/upi_qr.jpg');
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/upi_qr.jpg');
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+
+      if (!mounted) return;
+
+      // ignore: deprecated_member_use
+      await Share.shareXFiles([XFile(file.path)], text: 'Scan to Pay via UPI');
+    } catch (e) {
+      debugPrint('Error sharing QR: $e');
+    }
+  }
+
+  Future<void> _startUpiPayment(ApplicationMeta? appMeta) async {
+    // If no specific app is passed but we have apps loaded, try to use GPay or PhonePe first
+    // Or just fail if appMeta is required by the package (depending on version)
+    // For now, we assume the UI handles app selection or passing null launches a picker (if supported)
+    // or we just default to the first available app if null.
+
+    setState(() {
+      _isProcessing = true;
+    });
 
     try {
-      final res = await EasyUpiPaymentPlatform.instance.startPayment(
-        EasyUpiPaymentModel(
-          payeeVpa: 'sandeeptambe86@okicici',
-          payeeName: 'Sandeep Tambe',
-          amount: _amount,
-          transactionRefId: transactionId,
-          description: 'Canteen Wallet Topup',
-        ),
+      final transactionId = DateTime.now().millisecondsSinceEpoch.toString();
+      final amount = _amount; // UpiIndia takes double
+
+      debugPrint('Starting UPI Transaction via Package...');
+
+      final meta =
+          appMeta ?? (_apps != null && _apps!.isNotEmpty ? _apps!.first : null);
+      if (meta == null) {
+        throw 'No UPI applications found to initiate transaction.';
+      }
+
+      // Accessing .upiApplication via dynamic based on user feedback
+      final UpiApplication app = (meta as dynamic).upiApplication;
+
+      final UpiTransactionResponse response = await UpiPay.initiateTransaction(
+        app: app,
+        receiverUpiAddress: AppConstants.canteenVpa,
+        receiverName: AppConstants.canteenPayeeName,
+        transactionRef: transactionId,
+        transactionNote: 'Payment for Canteen',
+        amount: amount.toStringAsFixed(2),
       );
 
-      print('UPI Response: $res'); // Debugging
+      debugPrint('UPI Package Result: ${response.status}');
 
-      if (res != null) {
-        if (res.responseCode == '00' ||
-            res.responseCode?.toLowerCase() == 'success') {
-          // Success
-          _submitPayment(isQr: false);
-        } else if (res.responseCode == '01' ||
-            res.responseCode?.toLowerCase() == 'failure') {
-          // Failure
+      String status = 'FAILED';
+      switch (response.status) {
+        case UpiTransactionStatus.success:
+          status = 'SUCCESS';
+          break;
+        case UpiTransactionStatus.submitted:
+          status = 'SUBMITTED';
+          break;
+        case UpiTransactionStatus.failure:
+        default:
+          status = 'FAILED';
+          break;
+      }
+
+      if (status == 'SUCCESS') {
+        _submitPayment(isQr: false);
+      } else if (status == 'SUBMITTED') {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment Failed. Please try again.')),
-          );
-        } else {
-          // Submitted / Pending / User Cancelled (often returns captured response)
-          // If user cancelled, usually we get 'failure' or null.
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Transaction Status: ${res.responseCode ?? "Cancelled"}',
-              ),
-            ),
+            const SnackBar(content: Text('Payment Pending. Please wait.')),
           );
         }
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Transaction Cancelled')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment Failed or Cancelled')),
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      debugPrint('UPI Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
-  // Wrapper to match existing signature if needed, or just replace usages
-  Future<void> _launchUpiApp({String? appScheme}) async {
-    await _startUpiPayment(appScheme: appScheme);
+  Future<void> _launchUpiApp(ApplicationMeta appMeta) async {
+    await _showPaymentInstructions(appMeta);
+  }
+
+  Future<void> _showPaymentInstructions(ApplicationMeta appMeta) async {
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.background(context),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(51), // 0.2 * 255 ≈ 51
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.fromLTRB(
+          24,
+          24,
+          24,
+          MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 50,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withAlpha(26), // 0.1 * 255 ≈ 26
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.info_outline,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Payment Instructions',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary(context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: NeumorphicStyle.cardDecoration(
+                  context,
+                  borderRadius: 15,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInstructionStep(
+                      '1',
+                      'Review the payee name and UPI ID to confirm they are correct.',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInstructionStep(
+                      '2',
+                      'Check the total amount displayed before proceeding.',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInstructionStep(
+                      '3',
+                      'If everything looks accurate, approve the transaction using your UPI PIN.',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildInstructionStep(
+                      '4',
+                      'After the payment is successful, return to this app to continue.',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withAlpha(26), // 0.1 * 255 ≈ 26
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.orange.withAlpha(77),
+                  ), // 0.3 * 255 ≈ 77
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.orange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'If your UPI app shows an error or daily limit warning, please try a different bank account or UPI app.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: AppColors.textPrimary(context),
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _startUpiPayment(appMeta);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Continue to Pay',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInstructionStep(String number, String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            number,
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: AppColors.textPrimary(context),
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -355,13 +601,13 @@ class _PaymentScreenState extends State<PaymentScreen>
 
           if (_isProcessing)
             Container(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withAlpha(179),
               child: const Center(child: FamtLoader()),
             ),
 
           if (_showSuccess)
             Container(
-              color: Colors.black.withOpacity(0.7),
+              color: Colors.black.withAlpha(179),
               child: Center(child: SuccessConfetti(onCompleted: () {})),
             ),
         ],
@@ -400,14 +646,16 @@ class _PaymentScreenState extends State<PaymentScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   GestureDetector(
-                    onTap: () => _updateAmount(_amount - 100),
+                    onTap: _amount <= 0
+                        ? null
+                        : () => _updateAmount(_amount - 100),
                     child: Container(
                       width: 40,
                       height: 40,
                       decoration: NeumorphicStyle.buttonDecoration(
                         context,
                         borderRadius: 20,
-                        color: AppColors.primary,
+                        color: _amount <= 0 ? Colors.grey : AppColors.primary,
                       ),
                       child: const Icon(Icons.remove, color: Colors.white),
                     ),
@@ -443,14 +691,18 @@ class _PaymentScreenState extends State<PaymentScreen>
                   ),
                   const SizedBox(width: 20),
                   GestureDetector(
-                    onTap: () => _updateAmount(_amount + 100),
+                    onTap: _amount >= _maxPayable
+                        ? null
+                        : () => _updateAmount(_amount + 100),
                     child: Container(
                       width: 40,
                       height: 40,
                       decoration: NeumorphicStyle.buttonDecoration(
                         context,
                         borderRadius: 20,
-                        color: AppColors.primary,
+                        color: _amount >= _maxPayable
+                            ? Colors.grey
+                            : AppColors.primary,
                       ),
                       child: const Icon(Icons.add, color: Colors.white),
                     ),
@@ -458,6 +710,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                 ],
               ),
               const SizedBox(height: 20),
+
               Text(
                 'Max payable: ₹${_maxPayable.toStringAsFixed(0)}',
                 style: GoogleFonts.poppins(
@@ -487,7 +740,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                 decoration: _paymentMethodIndex == 0
                     ? BoxDecoration(
                         borderRadius: BorderRadius.circular(25),
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withAlpha(26),
                       )
                     : null,
                 child: Center(
@@ -514,7 +767,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                 decoration: _paymentMethodIndex == 1
                     ? BoxDecoration(
                         borderRadius: BorderRadius.circular(25),
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withAlpha(26),
                       )
                     : null,
                 child: Center(
@@ -557,7 +810,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           Stack(
             children: [
               Container(
-                height: 250,
+                height: 300,
                 width: 250,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(15),
@@ -571,7 +824,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                 bottom: 10,
                 right: 10,
                 child: GestureDetector(
-                  onTap: _launchUpiApp,
+                  onTap: _shareQrCode,
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -579,7 +832,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withAlpha(51),
                           blurRadius: 5,
                           offset: const Offset(0, 2),
                         ),
@@ -614,7 +867,7 @@ class _PaymentScreenState extends State<PaymentScreen>
                 color: AppColors.surface(context),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: AppColors.primary.withOpacity(0.5),
+                  color: AppColors.primary.withAlpha(128),
                   style: BorderStyle.solid,
                 ),
               ),
@@ -655,24 +908,82 @@ class _PaymentScreenState extends State<PaymentScreen>
                     ),
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 12),
+          // Warning & Confirmation
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withAlpha(26),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.withAlpha(77)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.orange,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Ensure uploaded receipt matches ₹${_amount.toStringAsFixed(0)}. Incorrect receipts will be rejected.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppColors.textPrimary(context),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            value: _receiptConfirmed,
+            onChanged: (val) {
+              setState(() {
+                _receiptConfirmed = val ?? false;
+              });
+            },
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(
+              'I confirm the receipt is correct',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: AppColors.textPrimary(context),
+              ),
+            ),
+            activeColor: AppColors.primary,
+          ),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => _submitPayment(isQr: true),
+              onPressed:
+                  (_amount > 0 && _receiptImage != null && _receiptConfirmed)
+                  ? () => _submitPayment(isQr: true)
+                  : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
+                disabledBackgroundColor: Colors.grey.withAlpha(50),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
               ),
               child: Text(
-                'Submit Payment',
+                _amount <= 0 ? 'No Payment Due' : 'Submit Payment',
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color:
+                      (_amount > 0 &&
+                          _receiptImage != null &&
+                          _receiptConfirmed)
+                      ? Colors.white
+                      : AppColors.textSecondaryLight,
                 ),
               ),
             ),
@@ -687,116 +998,67 @@ class _PaymentScreenState extends State<PaymentScreen>
       padding: const EdgeInsets.all(24),
       decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 25),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withAlpha(26),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.construction_rounded,
+              color: AppColors.primary,
+              size: 40,
+            ),
+          ),
+          const SizedBox(height: 24),
           Text(
-            'Enter Your UPI ID',
+            'Coming Soon',
             style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
               color: AppColors.textPrimary(context),
             ),
           ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: NeumorphicStyle.cardDecoration(
-              context,
-              borderRadius: 20,
-            ),
-            child: TextField(
-              controller: _userUpiController,
-              style: GoogleFonts.poppins(fontSize: 16),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: 'e.g. user@upi',
-                hintStyle: GoogleFonts.poppins(
-                  fontSize: 16,
-                  color: AppColors.textSecondaryLight.withOpacity(0.7),
-                ),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.check_circle_outline),
-                  onPressed: _verifyUpiId,
-                  color: _isUpiVerified ? Colors.green : Colors.grey,
-                ),
-              ),
-              onChanged: (val) {
-                if (_isUpiVerified) setState(() => _isUpiVerified = false);
-              },
-            ),
-          ),
-          if (_isUpiVerified) ...[
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _launchUpiApp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                ),
-                child: Text(
-                  'Pay Now',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 30),
-          const Divider(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           Text(
-            'Or Pay with Installed Apps',
+            'We are currently upgrading our UPI payment gateway to ensure smoother transactions. Please use QR Scan for now.',
+            textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 16,
-              fontWeight: FontWeight.w500,
               color: AppColors.textSecondaryLight,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 30),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _paymentMethodIndex = 0; // Switch to QR Scan
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              child: Text(
+                'Switch to QR Scan',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildUpiAppButton('GPay', 'gpay', Colors.blue),
-              _buildUpiAppButton('PhonePe', 'phonepe', Colors.purple),
-              _buildUpiAppButton('Paytm', 'paytm', Colors.indigo),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpiAppButton(String name, String scheme, Color color) {
-    return GestureDetector(
-      onTap: () => _launchUpiApp(appScheme: scheme),
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: color.withOpacity(0.3)),
-            ),
-            child: Icon(Icons.account_balance_wallet, color: color, size: 30),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textPrimary(context),
-            ),
-          ),
         ],
       ),
     );
@@ -890,7 +1152,7 @@ class _PaymentScreenState extends State<PaymentScreen>
           Container(
             padding: const EdgeInsets.all(30),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
+              color: Colors.orange.withAlpha(26),
               shape: BoxShape.circle,
             ),
             child: const Icon(

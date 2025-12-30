@@ -120,11 +120,11 @@ class AuthService {
   }
 
   // Verification Methods - Backend OTP
-  Future<Map<String, dynamic>> sendEmailOtp(String email) async {
+  Future<Map<String, dynamic>> sendEmailOtp(String email, String name) async {
     try {
       final response = await _apiService.post(
         '/verify/send-email-otp',
-        data: {'email': email},
+        data: {'email': email, 'name': name},
       );
       if (response.statusCode == 200) {
         // If in Dev mode, the backed might return the OTP in the message or generic success

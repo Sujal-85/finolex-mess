@@ -8,6 +8,7 @@ import dev.shreyaspatil.easyupipayment.exception.AppNotFoundException
 import dev.shreyaspatil.easyupipayment.listener.PaymentStatusListener
 import dev.shreyaspatil.easyupipayment.model.TransactionDetails
 import dev.shreyaspatil.easyupipayment.model.TransactionStatus
+import dev.shreyaspatil.easyupipayment.model.PaymentApp
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -36,6 +37,8 @@ class EasyUpiPaymentPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Pay
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
     if (call.method == "startPayment" && activity != null) {
         this.result = result
+        val appPackage = call.argument<String?>("appPackage")
+        
         easyUpiPayment = EasyUpiPayment(activity!!) {
         this.payeeVpa = call.argument<String>("payeeVpa")
         this.payeeName = call.argument<String>("payeeName")
@@ -44,6 +47,17 @@ class EasyUpiPaymentPlugin: FlutterPlugin, MethodCallHandler, ActivityAware, Pay
         this.transactionRefId = call.argument<String>("transactionRefId")
         this.description = call.argument<String?>("description")
         this.amount = call.argument<String>("amount")
+
+        if (appPackage != null && appPackage.isNotEmpty()) {
+            this.paymentApp = when (appPackage) {
+                "com.google.android.apps.nbu.paisa.user" -> PaymentApp.GOOGLE_PAY
+                "com.phonepe.app" -> PaymentApp.PHONE_PE
+                "net.one97.paytm" -> PaymentApp.PAYTM
+                "in.org.npci.upiapp" -> PaymentApp.BHIM_UPI
+                "in.amazon.mShop.android.shopping" -> PaymentApp.AMAZON_PAY
+                else -> PaymentApp.ALL
+            }
+        }
       }
 
       try {

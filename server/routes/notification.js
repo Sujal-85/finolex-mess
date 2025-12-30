@@ -16,6 +16,15 @@ router.get('/', async (req, res) => {
                     { userId: { $exists: false } }
                 ]
             };
+        } else {
+            // SECURITY FIX: If no userId provided, only return global notifications
+            // Do NOT return notifications meant for specific users
+            query = {
+                $or: [
+                    { userId: null },
+                    { userId: { $exists: false } }
+                ]
+            };
         }
 
         const notifications = await Notification.find(query).sort({ createdAt: -1 });

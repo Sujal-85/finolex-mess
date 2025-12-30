@@ -8,6 +8,8 @@ class PaymentDueCard extends StatelessWidget {
   final VoidCallback onPayNow;
   final double pendingAmount;
   final int fineAmount;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   const PaymentDueCard({
     super.key,
@@ -16,6 +18,8 @@ class PaymentDueCard extends StatelessWidget {
     required this.onPayNow,
     this.pendingAmount = 0.0,
     this.fineAmount = 0,
+    this.startDate,
+    this.endDate,
   });
 
   @override
@@ -116,13 +120,19 @@ class PaymentDueCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            'Total Outstanding',
-            style: GoogleFonts.roboto(
-              fontSize: 12,
-              color: AppColors.textSecondaryLight,
+          Text('Total Outstanding', style: GoogleFonts.roboto(fontSize: 12)),
+          const SizedBox(height: 4),
+          if (startDate != null) ...[
+            Text(
+              'Validity: ${startDate!.day}/${startDate!.month} to ${endDate != null ? "${endDate!.day}/${endDate!.month}" : "---"}',
+              style: GoogleFonts.roboto(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondaryLight.withOpacity(0.8),
+              ),
             ),
-          ),
+            const SizedBox(height: 4),
+          ],
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,

@@ -70,17 +70,61 @@ class NotificationService extends ChangeNotifier {
     }
   }
 
-  void _checkForNewAndNotify(List<NotificationModel> fetchedNotifications) {
+  Future<void> _checkForNewAndNotify(
+    List<NotificationModel> fetchedNotifications,
+  ) async {
     if (_notifications.isEmpty) return;
+
+    // 1. Check if Push Notifications are enabled
+    final prefs = await SharedPreferences.getInstance();
+    final pushEnabled = prefs.getBool('pushNotifications') ?? true;
+    if (!pushEnabled) return;
 
     final existingIds = _notifications.map((n) => n.id).toSet();
 
-    // Identify strictly new items (not just unread, but items we haven't seen before)
+    // Identify strictly new items
     final newItems = fetchedNotifications
         .where((n) => !existingIds.contains(n.id))
         .toList();
 
+    // 2. Fetch User Balance for Smart Filtering
+    // We do this only if there are new items to avoid unnecessary API calls
+    double? userBalance;
+    if (newItems.isNotEmpty) {
+      try {
+        final userStr = prefs.getString('auth_user');
+        if (userStr != null) {
+          final user = jsonDecode(userStr);
+          final userId = user['id'] ?? user['_id'];
+          // Fetch fresh user data to get accurate balance
+          final response = await ApiService().get('/users/$userId');
+          if (response.statusCode == 200) {
+            userBalance = (response.data['balance'] ?? 0).toDouble();
+            // Also update local cache while we are at it
+            await prefs.setString('auth_user', jsonEncode(response.data));
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching user balance for notification filter: $e');
+      }
+    }
+
+    final double messFee = 3500.0; // Standard fee threshold
+
     for (var item in newItems) {
+      // 3. Smart Filter: Suppress payment alerts if balance is sufficient
+      if (userBalance != null &&
+          (item.title.toLowerCase().contains('pending') ||
+              item.title.toLowerCase().contains('fine') ||
+              item.description.toLowerCase().contains('payment'))) {
+        if (userBalance >= messFee) {
+          debugPrint(
+            'Suppressing payment notification: User has sufficient balance ($userBalance)',
+          );
+          continue; // Skip showing this notification
+        }
+      }
+
       if (item.isNew || item.type == NotificationType.urgent) {
         _localNotificationService.showNotification(
           id: item.hashCode,
@@ -88,7 +132,6 @@ class NotificationService extends ChangeNotifier {
           body: item.description,
         );
       } else {
-        // Optional: Notify for all new items or just specific types
         _localNotificationService.showNotification(
           id: item.hashCode,
           title: item.title,

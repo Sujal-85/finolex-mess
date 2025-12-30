@@ -124,6 +124,16 @@ const scheduler = {
                             student.fineAmount = 0;
                             await student.save();
                             console.log(`[Scheduler Read-Repair] Marked ${student.name} as paid.`);
+
+                            // CLEANUP: Remove stale notifications
+                            try {
+                                await Notification.deleteMany({
+                                    userId: student._id,
+                                    title: { $in: ['Payment Pending ⚠️', 'Daily Fine Applied'] }
+                                });
+                            } catch (e) {
+                                console.error('Error cleaning up notifications in scheduler:', e);
+                            }
                         }
                     } else {
                         const totalFee = baseFee + (student.fineAmount || 0);

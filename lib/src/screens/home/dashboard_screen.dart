@@ -22,6 +22,8 @@ import '../../widgets/receipt_card.dart';
 import '../../models/transaction.dart';
 import '../../services/receipt_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/permission_service.dart';
+import '../../widgets/soft_ask_dialog.dart';
 // For ReceiptModal
 
 class DashboardScreen extends StatefulWidget {
@@ -36,11 +38,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     context.read<DashboardBloc>().add(DashboardLoadRequested());
-    // Request permissions after build
+    // Request permissions after build with a professional soft ask
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await LocalNotificationService().requestPermissions();
-      await FirebaseApi().requestPermission();
+      _checkNotificationPermission();
     });
+  }
+
+  Future<void> _checkNotificationPermission() async {
+    final service = PermissionService.instance;
+    final shouldAsk = await service.shouldShowSoftAsk();
+
+    if (shouldAsk && mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => SoftAskDialog(
+          onAllow: () async {
+            Navigator.pop(context);
+            await service.markSoftAskAsShown();
+            await service.requestNotification();
+            // Also trigger the existing local/firebase permission calls if needed
+            await LocalNotificationService().requestPermissions();
+            await FirebaseApi().requestPermission();
+          },
+          onDecline: () async {
+            Navigator.pop(context);
+            await service.markSoftAskAsShown();
+          },
+        ),
+      );
+    }
   }
 
   Future<void> _downloadReceipt(Transaction transaction) async {
@@ -120,8 +147,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 minute: 0,
               );
 
-              // Schedule Payment Due Notification if balance is low
-              if (state.balance < 3500) {
+              // Schedule Payment Due Notification if balance is low and grace period passed
+              bool shouldNotify = state.balance < state.messFee;
+              if (state.planStartDate != null) {
+                final graceDeadline = state.planStartDate!.add(
+                  const Duration(days: 7),
+                );
+                if (DateTime.now().isBefore(graceDeadline)) {
+                  shouldNotify = false; // Silence during grace period
+                }
+              }
+
+              if (shouldNotify) {
                 notificationService.scheduleDailyNotification(
                   id: 100,
                   title: 'Payment Due ⚠️',
@@ -194,12 +231,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final double fine = state.fineAmount;
                 final DateTime now = DateTime.now();
 
-                // Show due date from backend or default to 10th
-                final dueDateDisplay = state.paymentDueDate != null
-                    ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
-                    : '10th ${DateFormat('MMM').format(now)}';
+                double dynamicFine = 0.0; // Initialize dynamic fine
 
-                double totalMessFee = state.messFee + fine;
+                // Show due date from plan (8th day) or backend or default to 10th
+                String dueDateDisplay;
+                bool isGracePeriod = false;
+
+                if (state.planStartDate != null) {
+                  final eighthDay = state.planStartDate!.add(
+                    const Duration(days: 7),
+                  ); // 8th Day
+                  dueDateDisplay =
+                      '${eighthDay.day}th ${DateFormat('MMM').format(eighthDay)}';
+
+                  // Calculate Dynamic Fine: ₹5 per day past eighthDay
+                  if (now.isAfter(eighthDay)) {
+                    final today = DateTime(now.year, now.month, now.day);
+                    final due = DateTime(
+                      eighthDay.year,
+                      eighthDay.month,
+                      eighthDay.day,
+                    );
+                    final diffDays = today.difference(due).inDays;
+                    if (diffDays > 0) {
+                      dynamicFine = diffDays * 5.0;
+                    }
+                  } else {
+                    isGracePeriod = true;
+                  }
+                } else {
+                  dueDateDisplay = state.paymentDueDate != null
+                      ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
+                      : '10th ${DateFormat('MMM').format(now)}';
+                }
+
+                // Final effective fine to show
+                final double effectiveFine = (state.balance >= state.messFee)
+                    ? 0.0
+                    : dynamicFine;
+
+                double totalMessFee = state.messFee + effectiveFine;
                 double currentBalance = (state.balance ?? 0).toDouble();
                 double outstanding =
                     totalMessFee - currentBalance - pendingAmount;
@@ -271,7 +342,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           amount: outstanding,
                                           pendingAmount: pendingAmount,
                                           dueDate: dueDateDisplay,
-                                          fineAmount: fine.toInt(),
+                                          fineAmount: effectiveFine.toInt(),
+                                          startDate: state.planStartDate,
+                                          endDate: state.planEndDate,
                                           onPayNow: () async {
                                             await context.push('/payment');
                                             if (context.mounted) {
@@ -437,9 +510,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               'Rules',
                                               Icons.gavel_outlined,
                                               Colors.purple,
+                                              () => context.push('/mess-rules'),
+                                            ),
+                                            _buildCompactAction(
+                                              'Rebate Cal',
+                                              Icons.calculate_outlined,
+                                              Colors.teal,
                                               () => context.push(
-                                                '/about',
-                                              ), // Placeholder
+                                                '/rebate-calculator',
+                                              ),
                                             ),
                                             _buildCompactAction(
                                               'Settings',
@@ -731,12 +810,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(height: 8),
-            Text(
-              title,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary(context),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary(context),
+                ),
               ),
             ),
           ],
@@ -824,27 +906,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              description,
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: AppColors.textPrimary(context),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                description,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textPrimary(context),
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formattedDate,
-              style: GoogleFonts.roboto(
-                fontSize: 12,
-                color: AppColors.textSecondaryLight,
+              const SizedBox(height: 4),
+              Text(
+                formattedDate,
+                style: GoogleFonts.roboto(
+                  fontSize: 12,
+                  color: AppColors.textSecondaryLight,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        const SizedBox(width: 12),
         Text(
           '${isCredit ? '+' : '-'} ₹${amount.toStringAsFixed(2)}',
           style: GoogleFonts.poppins(

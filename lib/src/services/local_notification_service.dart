@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class LocalNotificationService {
   static final LocalNotificationService _instance =
@@ -16,7 +17,7 @@ class LocalNotificationService {
 
   LocalNotificationService._internal();
 
-  Future<void> init() async {
+  Future<void> init({bool requestPermission = true}) async {
     tz.initializeTimeZones();
     // Fix LateInitializationError by setting a default local location
     try {
@@ -52,15 +53,24 @@ class LocalNotificationService {
     );
 
     // Request permissions for Android 13+
-    await requestPermissions();
+    if (requestPermission) {
+      await requestPermissions();
+    }
   }
 
   Future<void> requestPermissions() async {
+    // 1. Using fln plugin request (standard)
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
           fln.AndroidFlutterLocalNotificationsPlugin
         >()
         ?.requestNotificationsPermission();
+
+    // 2. Using permission_handler for robust status check (especially for Android 13+)
+    final status = await Permission.notification.status;
+    if (status.isDenied) {
+      await Permission.notification.request();
+    }
   }
 
   Future<void> showNotification({

@@ -26,6 +26,8 @@ import '../screens/settings/privacy_policy_screen.dart';
 import '../screens/settings/terms_screen.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../theme/animations.dart';
+import '../screens/mess_rules_screen.dart';
+import '../screens/rebate_calculator_screen.dart';
 
 class AppRouter {
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -249,6 +251,20 @@ class AppRouter {
         pageBuilder: (context, state) => AppAnimations.transitionPage(
           key: state.pageKey,
           child: const TermsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/mess-rules',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const MessRulesScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/rebate-calculator',
+        pageBuilder: (context, state) => AppAnimations.transitionPage(
+          key: state.pageKey,
+          child: const RebateCalculatorScreen(),
         ),
       ),
     ],

@@ -239,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           IconButton(
-            onPressed: () => context.push('/profile'),
+            onPressed: () => context.push('/edit-profile'),
             icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
           ),
         ],

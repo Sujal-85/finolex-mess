@@ -61,9 +61,9 @@ dependencies:
   workmanager: ^0.6.0
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1
-  easy_upi_payment:
-    path: ./packages/easy_upi_payment
+  flutter_upi_india: ^1.0.1
   firebase_messaging: ^15.2.10
+  firebase_app_check: ^0.3.2+10
 
 
 
@@ -130,6 +130,7 @@ flutter:
     - assets/lottie/welcome.json
     - assets/lottie/loading animation.json
     - assets/lottie/No Data Animation.json
+    - "assets/Hostel Mess Charges and Rebate Rule_251216_195916.pdf"
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

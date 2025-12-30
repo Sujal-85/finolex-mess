@@ -9,6 +9,9 @@ import '../widgets/animations/success_confetti.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/cloudinary_service.dart';
 import '../theme/colors.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 class StudentRegistrationScreen extends StatefulWidget {
   const StudentRegistrationScreen({super.key});
@@ -51,7 +54,9 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
 
   // Verification
   bool _isPhoneVerified = false;
+  bool _isEmailVerified = false;
   String? _verificationId;
+  bool _acceptedPolicy = false; // Add policy acceptance state
 
   // Services
   final AuthService _authService = AuthService();
@@ -67,7 +72,47 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
 
     if (!_formKeys[2]!.currentState!.validate()) return;
 
+    if (!_acceptedPolicy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please accept the Mess Rules & Rebate Policy to register',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     // Final check logic
+    // Final check logic
+    if (_profileImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please upload a profile image'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your date of birth'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (!_isEmailVerified) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please verify your email address in Step 2'),
+        ),
+      );
+      return;
+    }
     if (!_isPhoneVerified) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -99,8 +144,8 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
           'hostelName': _isHostelite ? _hostelNameController.text.trim() : '',
           'roomNo': _isHostelite ? _roomNoController.text.trim() : '',
         },
-        'isEmailVerified': true, // Trusted as per requirements
-        'isPhoneVerified': true, // Enforced by UI
+        'isEmailVerified': _isEmailVerified,
+        'isPhoneVerified': true,
       });
 
       if (response['success']) {
@@ -136,7 +181,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     setState(() => _isSubmitting = true);
 
     // DEV BYPASS: Allow 9876543210 to skip Firebase (useful if blocked)
-    if (phone == '9876543210') {
+    if (phone == 'y76543210') {
       await Future.delayed(const Duration(seconds: 1)); // Simulate network
       setState(() {
         _isPhoneVerified = true;
@@ -186,6 +231,46 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
           if (mounted) setState(() => _verificationId = verificationId);
         },
       );
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+      );
+    }
+  }
+
+  Future<void> _verifyEmail() async {
+    final email = _emailController.text.trim();
+    final name = _fullNameController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an email address first')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final res = await _authService.sendEmailOtp(email, name);
+      setState(() => _isSubmitting = false);
+
+      if (res['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        _showEmailOtpDialog();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     } catch (e) {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -281,6 +366,93 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     );
   }
 
+  void _showEmailOtpDialog() {
+    _otpController.clear();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.surface(context),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Verify Email',
+          style: TextStyle(color: AppColors.textPrimary(context)),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Enter the 6-digit code sent to\n${_emailController.text}',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _otpController,
+              keyboardType: TextInputType.number,
+              style: TextStyle(
+                color: AppColors.textPrimary(context),
+                letterSpacing: 4,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+              maxLength: 6,
+              decoration: InputDecoration(
+                hintText: '000000',
+                counterText: '',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: () async {
+              final otp = _otpController.text.trim();
+              if (otp.length != 6) return;
+              Navigator.pop(context);
+
+              setState(() => _isSubmitting = true);
+              final res = await _authService.verifyEmailOtp(
+                _emailController.text.trim(),
+                otp,
+              );
+              setState(() => _isSubmitting = false);
+
+              if (res['success']) {
+                setState(() => _isEmailVerified = true);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Email Verified Successfully!'),
+                    backgroundColor: AppColors.success,
+                  ),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(res['message']),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
+            },
+            child: const Text('Verify', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSuccessDialog(String studentId) {
     showDialog(
       context: context,
@@ -337,10 +509,6 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Stepper Color Logic
-    Color activeColor = AppColors.primary;
-    Color inactiveColor = AppColors.textSecondary(context).withOpacity(0.3);
-
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: AppBar(
@@ -433,19 +601,55 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: () {
-                          if (_currentStep == 1 && !_isPhoneVerified) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Please verify your phone number first',
+                          if (_currentStep == 1) {
+                            if (!_isEmailVerified) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please verify your email address first',
+                                  ),
                                 ),
-                              ),
-                            );
-                            return;
+                              );
+                              return;
+                            }
+                            if (!_isPhoneVerified) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Please verify your phone number',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
                           }
 
                           if (_formKeys[_currentStep]!.currentState!
                               .validate()) {
+                            if (_currentStep == 0) {
+                              if (_profileImage == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please upload a profile image',
+                                    ),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                                return;
+                              }
+                              if (_selectedDate == null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Please select your date of birth',
+                                    ),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                                return;
+                              }
+                            }
                             if (_currentStep < 2) {
                               setState(() => _currentStep++);
                             } else {
@@ -703,12 +907,20 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   _hostelNameController,
                   'Hostel Name',
                   Icons.apartment,
+                  validator: (v) =>
+                      _isHostelite && (v == null || v.trim().isEmpty)
+                      ? 'Hostel name is required'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 _buildTextField(
                   _roomNoController,
                   'Room Number',
                   Icons.door_front_door_outlined,
+                  validator: (v) =>
+                      _isHostelite && (v == null || v.trim().isEmpty)
+                      ? 'Room number is required'
+                      : null,
                 ),
               ],
             ],
@@ -720,85 +932,178 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
 
   // STEP 2: Verification
   Widget _buildVerificationStep() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(
-          Icons.phonelink_ring_outlined,
-          size: 80,
-          color: AppColors.primary,
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Mobile Verification',
-          style: GoogleFonts.outfit(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary(context),
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 1. Email Verification Section
+          const Icon(
+            Icons.mark_email_read_outlined,
+            size: 80,
+            color: AppColors.primary,
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'We need to verify your phone number to secure your account.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.textSecondary(context)),
-        ),
-        const SizedBox(height: 32),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                _phoneController,
-                'Phone Number',
-                Icons.phone_android,
-                keyboardType: TextInputType.phone,
-              ),
+          const SizedBox(height: 24),
+          Text(
+            'Email Verification',
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary(context),
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _isPhoneVerified ? null : _verifyPhone,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isPhoneVerified
-                      ? AppColors.success
-                      : AppColors.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'We will send a verification code to your email.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary(context)),
+          ),
+          const SizedBox(height: 32),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  _emailController,
+                  'Email Address',
+                  Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                  // Make it read-only here so they verify the one they entered in Step 1
+                  // or allow editing but sync back? Better read-only to avoid confusion.
+                  // But if they realized they made a mistake, they should go back to Step 1.
                 ),
-                child: _isPhoneVerified
-                    ? const Icon(Icons.check, color: Colors.white)
-                    : const Text(
-                        'Send OTP',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isEmailVerified ? null : _verifyEmail,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isEmailVerified
+                        ? AppColors.success
+                        : AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isEmailVerified
+                      ? const Icon(Icons.check, color: Colors.white)
+                      : const Text(
+                          'Send OTP',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
+                ),
+              ),
+            ],
+          ),
+          if (_isEmailVerified)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.verified, color: AppColors.success),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Email Verified Successfully',
+                    style: GoogleFonts.inter(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        if (_isPhoneVerified)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.verified, color: AppColors.success),
-                const SizedBox(width: 8),
-                Text(
-                  'Phone Verified Successfully',
-                  style: GoogleFonts.inter(
-                    color: AppColors.success,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 48),
+
+          // 2. Mobile Verification Section
+          const Icon(
+            Icons.phonelink_ring_outlined,
+            size: 80,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Mobile Verification',
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary(context),
             ),
           ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            'We need to verify your phone number to secure your account.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary(context)),
+          ),
+          const SizedBox(height: 32),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  _phoneController,
+                  'Phone Number',
+                  Icons.phone_android,
+                  keyboardType: TextInputType.phone,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) {
+                      return 'Phone number is required';
+                    }
+                    if (v.trim().length != 10) {
+                      return 'Enter a valid 10-digit number';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _isPhoneVerified ? null : _verifyPhone,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isPhoneVerified
+                        ? AppColors.success
+                        : AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isPhoneVerified
+                      ? const Icon(Icons.check, color: Colors.white)
+                      : const Text(
+                          'Send OTP',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+          if (_isPhoneVerified)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.verified, color: AppColors.success),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Phone Verified Successfully',
+                    style: GoogleFonts.inter(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -932,8 +1237,84 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
           validator: (v) =>
               v != _passwordController.text ? 'Passwords do not match' : null,
         ),
+        const SizedBox(height: 32),
+        // Policy Acceptance Section
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _acceptedPolicy
+                ? AppColors.primary.withOpacity(0.05)
+                : AppColors.surface(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _acceptedPolicy
+                  ? AppColors.primary
+                  : AppColors.textSecondary(context).withOpacity(0.2),
+            ),
+          ),
+          child: Column(
+            children: [
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _acceptedPolicy,
+                activeColor: AppColors.primary,
+                title: Text(
+                  'Accept Mess Rules & Rebate Policy',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary(context),
+                  ),
+                ),
+                subtitle: Text(
+                  'I agree to strictly follow the college mess guidelines.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary(context),
+                  ),
+                ),
+                onChanged: (v) => setState(() => _acceptedPolicy = v ?? false),
+              ),
+              const Divider(),
+              TextButton.icon(
+                onPressed: _openRulesPdf,
+                icon: const Icon(Icons.picture_as_pdf, color: Colors.blue),
+                label: const Text(
+                  'Read Full Policy (PDF)',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _openRulesPdf() async {
+    try {
+      final byteData = await rootBundle.load(
+        'assets/Hostel Mess Charges and Rebate Rule_251216_195916.pdf',
+      );
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/rebate_rules_registration.pdf');
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+
+      // Use Share to open (acts as "Open With")
+      await Share.shareXFiles([
+        XFile(file.path),
+      ], text: 'Hostel Mess Rebate Rules');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not open PDF: $e')));
+      }
+    }
   }
 
   Widget _buildCriteriaChip(String label, bool isMet) {
