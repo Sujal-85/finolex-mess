@@ -332,13 +332,23 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
             ),
             child: const Icon(Icons.delete, color: Colors.white),
           ),
-          onDismissed: (direction) {
+          confirmDismiss: (direction) async {
             if (direction == DismissDirection.endToStart) {
-              // Delete notification
-              notificationService.deleteNotification(notification.id);
+              // DELETE direction
+              return true; // Use onDismissed to delete
             } else {
-              // Mark as read
-              notificationService.markAsRead(notification.id);
+              // MARK AS READ direction
+              // We do NOT want to remove the widget from the tree, just update its status
+              if (notification.isUnread) {
+                await notificationService.markAsRead(notification.id);
+              }
+              return false; // Snap back, do not dismiss
+            }
+          },
+          onDismissed: (direction) {
+            // This is ONLY reached if confirmDismiss returns true (i.e., Delete)
+            if (direction == DismissDirection.endToStart) {
+              notificationService.deleteNotification(notification.id);
             }
           },
           child: Container(

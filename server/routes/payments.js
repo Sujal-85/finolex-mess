@@ -79,21 +79,77 @@ router.put('/update-status', async (req, res) => {
             if (status === 'Success') {
                 const student = await Student.findById(transaction.studentId);
                 if (student) {
-                    // Update Balance
-                    student.balance += transaction.amount;
+                    // Update Balance (Logic: Balance is DEBT. Payment reduces DEBT.)
+                    // student.balance -= transaction.amount; // Old logic? No, balance was debt.
+                    // Wait, previous logic was `student.balance += transaction.amount` which implies balance was "Amount Paid" or "Wallet".
+                    // BUT we just switched to "Balance = Debt".
+                    // So if Balance is Debt (e.g., 3500), and I pay 3500, Balance should become 0.
+                    // So: student.balance -= transaction.amount;
+
+                    // HOWEVER, we are now using `activePlans` as source of truth.
+                    // We need to allocate this payment to the oldest 'pending' plans.
+
+                    let remainingPayment = transaction.amount;
+
+                    // Sort pending plans by date (oldest first)
+                    if (student.activePlans && student.activePlans.length > 0) {
+                        const pendingPlans = student.activePlans
+                            .filter(p => p.status === 'pending')
+                            .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+                        for (let plan of pendingPlans) {
+                            if (remainingPayment >= plan.price) {
+                                plan.status = 'paid';
+                                remainingPayment -= plan.price;
+                                console.log(`[Payment] Cleared plan: ${plan.name} (${plan.price})`);
+                            } else {
+                                // Partial payment? 
+                                // For now, we only mark as paid if fully covered?
+                                // Or do we enable partial status?
+                                // Let's simplify: Only mark 'paid' if fully covered.
+                                // Remaining payment just reduces the "Balance" field visually?
+                                // But next time we recalc balance index, it will sum active plans.
+                                // FIX: We need a "paidAmount" field in activePlans?
+                                // OR: Just trust `balance`.
+
+                                // If we rely on valid 'activePlans' status for reports, we MUST mark them paid.
+                                // If payment is partial, plan remains pending.
+                                break;
+                            }
+                        }
+                    }
+
+                    // Recalculate Balance
+                    // Balance = (Sum of Pending Plans) + Fines - (Any Unallocated Credit/Partial Payments)
+                    // This is getting complex.
+                    // Lets define: Balance = Current Outstanding Debt.
+
+                    // Simple approach for now:
+                    // 1. Reduce Balance by Amount.
+                    // 2. If Balance <= 0, mark ALL as paid? No, that's risky.
+
+                    // Better approach:
+                    // 1. Try to clear plans.
+                    // 2. Recalculate Balance = expectedSumOfPending - excessPayment
+
+                    const totalPendingDebt = student.activePlans
+                        .filter(p => p.status === 'pending')
+                        .reduce((sum, p) => sum + p.price, 0);
+
+                    // If we cleared plans, they are no longer in this sum.
+                    // If we have remainingPayment (partial for next plan or extra), subtract it.
+
+                    student.balance = totalPendingDebt - remainingPayment;
 
                     // Check if fully paid
-                    // Assuming Total Monthly Fee = Plan Price + Fine
-                    const planPrice = await getActivePlanPrice();
-                    const totalFee = planPrice + (student.fineAmount || 0);
-                    const remainingDues = Math.max(0, totalFee - student.balance);
+                    const remainingDues = student.balance;
 
                     let title = 'Payment Approved ✅';
-                    let description = `Your payment of ₹${transaction.amount} has been approved. New Balance: ₹${student.balance}. Remaining Dues: ₹${remainingDues}.`;
+                    let description = `Your payment of ₹${transaction.amount} has been approved. Remaining Dues: ₹${remainingDues.toFixed(2)}.`;
 
                     if (remainingDues <= 0) {
                         student.paymentStatus = 'paid';
-                        student.fineAmount = 0; // Clear fines if fully paid 
+                        student.fineAmount = 0; // Clear fines
 
                         title = 'Payment Done Thank You! 🎉';
                         description = 'Payment is done thank you. Your mess fees are fully paid.';
@@ -104,12 +160,11 @@ router.put('/update-status', async (req, res) => {
                                 userId: student._id,
                                 title: { $in: ['Payment Pending ⚠️', 'Daily Fine Applied'] }
                             });
-                            console.log(`Removed stale notifications for ${student.name}`);
                         } catch (err) {
                             console.error('Error removing stale notifications:', err);
                         }
                     } else {
-                        student.paymentStatus = 'pending'; // Still pending if partial
+                        student.paymentStatus = 'pending';
                     }
 
                     await student.save();

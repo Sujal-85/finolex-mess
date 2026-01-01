@@ -53,6 +53,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final hostelBlock = hostelDetails['hostelName'] ?? 'Not Assigned';
       final roomNumber = hostelDetails['roomNo'] ?? 'N/A';
 
+      // Extract activePlans
+      final List<Map<String, dynamic>> activePlans =
+          user?['activePlans'] != null
+          ? List<Map<String, dynamic>>.from(user!['activePlans'])
+          : [];
+
       // Fetch birthdays
       final birthdayResponse = await api.get('/students/birthdays/today');
       final birthdays = List<Map<String, dynamic>>.from(birthdayResponse.data);
@@ -130,17 +136,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       }
 
       double pendingAmount = 0.0;
-      double completedUnsyncedAmount = 0.0;
 
       if (recentTransactions.isNotEmpty) {
         // Calculate Pending (Only strictly Pending)
         pendingAmount = recentTransactions
             .where((t) => t['status'] == 'Pending')
-            .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
-
-        // Calculate Completed (Add to balance if not already synced which we assume here)
-        completedUnsyncedAmount = recentTransactions
-            .where((t) => t['status'] == 'Completed')
             .fold(0.0, (sum, t) => sum + (t['amount'] as num).toDouble());
       }
 
@@ -174,10 +174,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       }
 
       // Adjust balance to include 'Completed' transactions which are legacy/unsynced
-      final adjustedBalance = balance + completedUnsyncedAmount;
+      // In the new "Balance = Debt" model, we generally expect balance to be correct from backend.
+      // But if we have local 'Completed' transactions not yet reflected, we might subtract them from Debt?
+      // For safety, let's rely on Backend Balance as authoritative for Debt for now,
+      // as adding "Completed" amounts (which are usually Paid) to Debt would be wrong.
+      final adjustedBalance = balance;
 
       // Check if total dues are cleared
-      // Assuming messFee is the total fee
+      // New Model: Balance is Outstanding Debt. If <= 0, no dues.
 
       // Dynamic Fine Calculation: ₹5 per day past the 8th day
       double fineAmount = 0.0;
@@ -200,7 +204,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         fineAmount = (user?['fineAmount'] ?? 0).toDouble();
       }
 
-      if (adjustedBalance >= messFee) {
+      // If Debt is cleared (Balance <= 0), no fine should be shown/applied
+      if (adjustedBalance <= 0) {
         fineAmount = 0.0;
       }
       DateTime? paymentDueDate;
@@ -231,6 +236,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           messFee: messFee,
           planStartDate: planStartDate,
           planEndDate: planEndDate,
+          activePlans: activePlans,
         ),
       );
     } catch (e) {

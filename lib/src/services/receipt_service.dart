@@ -305,7 +305,7 @@ class ReceiptService {
                 bottom: 150,
                 left: 40,
                 child: pw.Transform.rotate(
-                  angle: -0.5,
+                  angle: -0.2,
                   child: pw.Container(
                     padding: const pw.EdgeInsets.symmetric(
                       horizontal: 20,

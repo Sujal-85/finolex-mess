@@ -318,13 +318,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                     }
 
                     // Final effective fine to show
-                    final double effectiveFine =
-                        (state.balance >= state.messFee) ? 0.0 : dynamicFine;
+                    final double effectiveFine = (state.balance <= 0)
+                        ? 0.0
+                        : dynamicFine; // If balance (Debt) <= 0, no fine
 
-                    double totalMessFee = state.messFee + effectiveFine;
                     double currentBalance = (state.balance ?? 0).toDouble();
+
+                    // NEW LOGIC: Balance IS the Debt.
+                    // Outstanding = Balance (Debt) + Fine - Pending Payments
                     double outstanding =
-                        totalMessFee - currentBalance - pendingAmount;
+                        currentBalance + effectiveFine - pendingAmount;
                     if (outstanding < 0) outstanding = 0;
 
                     return Column(
@@ -409,6 +412,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                               fineAmount: effectiveFine.toInt(),
                                               startDate: state.planStartDate,
                                               endDate: state.planEndDate,
+                                              activePlans: state.activePlans,
                                               onPayNow: () async {
                                                 await context.push('/payment');
                                                 if (context.mounted) {
@@ -418,6 +422,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                                                 }
                                               },
                                             ),
+                                            // DEBUG INFO - REMOVE LATER
+                                            // Padding(
+                                            //   padding: const EdgeInsets.all(
+                                            //     8.0,
+                                            //   ),
+                                            //   child: Text(
+                                            //     'DEBUG: Bal: ${state.balance}, Fine: $effectiveFine, Pending: $pendingAmount, Out: $outstanding',
+                                            //     style: const TextStyle(
+                                            //       fontSize: 10,
+                                            //       color: Colors.grey,
+                                            //     ),
+                                            //   ),
+                                            // ),
                                             if (outstanding <= 0) ...[
                                               Builder(
                                                 builder: (context) {

@@ -103,6 +103,7 @@ router.post('/send-email-otp', async (req, res) => {
             </html>
         `;
 
+        const functions = require('firebase-functions');
         // Send to n8n Webhook
         const webhookUrl = process.env.N8N_EMAIL_WEBHOOK_URL;
 

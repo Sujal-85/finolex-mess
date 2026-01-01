@@ -34,6 +34,7 @@ class DashboardLoaded extends DashboardState {
   final String dinnerItem;
   final DateTime? planStartDate;
   final DateTime? planEndDate;
+  final List<Map<String, dynamic>> activePlans;
 
   const DashboardLoaded({
     required this.balance,
@@ -55,6 +56,7 @@ class DashboardLoaded extends DashboardState {
     this.messFee = 3500.0,
     this.planStartDate,
     this.planEndDate,
+    this.activePlans = const [],
   });
 
   DashboardLoaded copyWith({
@@ -77,6 +79,7 @@ class DashboardLoaded extends DashboardState {
     double? messFee,
     DateTime? planStartDate,
     DateTime? planEndDate,
+    List<Map<String, dynamic>>? activePlans,
   }) {
     return DashboardLoaded(
       balance: balance ?? this.balance,
@@ -98,6 +101,7 @@ class DashboardLoaded extends DashboardState {
       messFee: messFee ?? this.messFee,
       planStartDate: planStartDate ?? this.planStartDate,
       planEndDate: planEndDate ?? this.planEndDate,
+      activePlans: activePlans ?? this.activePlans,
     );
   }
 
@@ -122,6 +126,7 @@ class DashboardLoaded extends DashboardState {
     messFee,
     planStartDate,
     planEndDate,
+    activePlans,
   ];
 }
 

@@ -22,6 +22,15 @@ const studentSchema = new mongoose.Schema({
     fcmToken: { type: String }, // For push notifications
 
     // Payment & Fine Tracking
+    activePlans: [{
+        planId: { type: mongoose.Schema.Types.ObjectId, ref: 'plans' },
+        name: String,
+        price: Number,
+        startDate: Date,
+        endDate: Date,
+        status: { type: String, enum: ['paid', 'pending'], default: 'pending' },
+        addedAt: { type: Date, default: Date.now }
+    }],
     paymentStatus: { type: String, enum: ['paid', 'pending', 'overdue'], default: 'pending' },
     paymentDueDate: { type: Date, default: () => new Date(new Date().getFullYear(), new Date().getMonth(), 10) }, // Default to 10th of current month
     fineAmount: { type: Number, default: 0 },
