@@ -794,20 +794,21 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildPayButton() {
-    double baseFee = _userProfile?.messFee ?? 3500;
     double fine = _userProfile?.fineAmount ?? 0;
     final double currentAmount = _userProfile?.currentBalance ?? 0;
     final double pendingAmount = _userProfile?.pendingAmount ?? 0;
 
-    // Frontend Logic: If user has paid Base Fee, explicitly ignore backend fine.
-    if (currentAmount >= baseFee) {
-      fine = 0;
+    // Logic: Balance (Debt) + Fine - Pending
+
+    // Check if fine applies
+    double effectiveFine = 0.0;
+    if (currentAmount > 0) {
+      // Only charge fine if there is debt
+      effectiveFine = fine;
     }
 
-    final double targetAmount = baseFee + fine;
-
     // Calculate Net Due
-    double netDue = targetAmount - (currentAmount + pendingAmount);
+    double netDue = currentAmount + effectiveFine - pendingAmount;
     if (netDue < 0) netDue = 0;
 
     return Center(

@@ -1,0 +1,14 @@
+{
+    "functions": {
+        "source": "server",
+        "requiredUserEnvVariables": [
+            "MONGODB_URI"
+        ],
+        "ignore": [
+            "node_modules",
+            ".git",
+            "firebase-debug.log",
+            "firebase-debug.*.log"
+        ]
+    }
+}

@@ -53,7 +53,8 @@ router.post('/login', async (req, res) => {
                 name: student.name,
                 email: student.email,
                 balance: student.balance,
-                profileImage: student.profileImage
+                profileImage: student.profileImage,
+                activePlans: student.activePlans
             }
         });
     } catch (err) {

@@ -91,13 +91,11 @@ class _PaymentScreenState extends State<PaymentScreen>
         debugPrint('Error fetching transactions for balance check: $e');
       }
 
-      double messFee = 3500.0;
       DateTime? planStartDate;
       try {
         final api = ApiService();
         final planResponse = await api.get('/plans');
         if (planResponse.statusCode == 200 && planResponse.data != null) {
-          messFee = (planResponse.data['price'] ?? 3500).toDouble();
           if (planResponse.data['startDate'] != null) {
             planStartDate = DateTime.parse(
               planResponse.data['startDate'],
@@ -124,14 +122,17 @@ class _PaymentScreenState extends State<PaymentScreen>
         fine = (user['fineAmount'] ?? 0).toDouble();
       }
 
-      // Logic: (Fee + Fine) - Balance - Pending
-      // Also apply logic: Ignore fine if base is covered
-      double totalFee = messFee + fine;
-      if (balance >= messFee) {
-        totalFee = messFee; // Ignore fine if base is covered
+      // Logic: Balance (Debt) + Fine - Pending
+      // If balance is negative (Credit), it reduces the payable amount naturally.
+
+      // Check if fine applies (same logic as dashboard)
+      double effectiveFine = 0.0;
+      if (balance > 0) {
+        // Only charge fine if there is debt
+        effectiveFine = fine;
       }
 
-      final double remaining = totalFee - balance - pendingAmount;
+      final double remaining = balance + effectiveFine - pendingAmount;
 
       setState(() {
         _user = user;

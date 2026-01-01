@@ -13,8 +13,8 @@ const scheduler = {
         cron.schedule('*/10 * * * *', async () => {
             console.log('Running Keep-Alive Ping');
             try {
-                // Use the public Render URL
-                await axios.get('https://finolex-mess.onrender.com/ping');
+                // Use the public Cloud Functions URL
+                await axios.get('https://api-457xe7azkq-uc.a.run.app/ping');
                 console.log('Keep-Alive ping successful');
             } catch (error) {
                 console.error('Keep-Alive ping failed:', error.message);

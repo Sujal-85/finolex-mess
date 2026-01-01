@@ -10,6 +10,7 @@ class PaymentDueCard extends StatelessWidget {
   final int fineAmount;
   final DateTime? startDate;
   final DateTime? endDate;
+  final List<Map<String, dynamic>> activePlans;
 
   const PaymentDueCard({
     super.key,
@@ -20,6 +21,7 @@ class PaymentDueCard extends StatelessWidget {
     this.fineAmount = 0,
     this.startDate,
     this.endDate,
+    this.activePlans = const [],
   });
 
   @override
@@ -166,6 +168,38 @@ class PaymentDueCard extends StatelessWidget {
                 ),
               ],
             ),
+          ],
+          if (activePlans.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Divider(),
+            Text(
+              'Active Plans:',
+              style: GoogleFonts.roboto(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...activePlans.map((plan) {
+              final pName = plan['name'] ?? 'Mess Plan';
+              final pPrice = plan['price'] ?? 0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 2.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(pName, style: GoogleFonts.roboto(fontSize: 12)),
+                    Text(
+                      '₹$pPrice',
+                      style: GoogleFonts.roboto(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
           ],
           if (pendingAmount > 0) ...[
             const SizedBox(height: 8),

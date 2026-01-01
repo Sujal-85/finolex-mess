@@ -126,7 +126,7 @@ class LocalNotificationService {
           ),
           iOS: fln.DarwinNotificationDetails(),
         ),
-        androidScheduleMode: fln.AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: fln.AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             fln.UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: fln.DateTimeComponents.time,

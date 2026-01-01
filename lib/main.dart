@@ -19,15 +19,16 @@ import 'dart:math';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
-// import 'firebase_options.dart'; // Ensure this file exists, otherwise just default if checking platform
+import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.playIntegrity,
     appleProvider: AppleProvider.deviceCheck,
+    webProvider: ReCaptchaV3Provider('6Lcj-R8qAAAAAB7P6V5V0V3V'),
   );
 
   SystemChrome.setSystemUIOverlayStyle(

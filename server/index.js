@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 
+const functions = require('firebase-functions');
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -16,7 +18,13 @@ app.use(cors({
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_canteen@mess.dqhbzlz.mongodb.net/finolex_canteen?appName=Mess", {
+// MongoDB Connection
+const getMongoUri = () => {
+    return process.env.MONGODB_URI ||
+        "mongodb+srv://finolex:finolex_canteen@mess.dqhbzlz.mongodb.net/finolex_canteen?appName=Mess";
+};
+
+mongoose.connect(getMongoUri(), {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 })
@@ -56,54 +64,58 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://finolex:finolex_cante
         } catch (error) {
             console.error('Menu migration setup error:', error);
         }
-
-        // Routes
-        const paymentRoutes = require('./routes/payments');
-        const menuRoutes = require('./routes/menuItems');
-        const announcementRoutes = require('./routes/announcements');
-        const complaintRoutes = require('./routes/complaints');
-        const inventoryRoutes = require('./routes/inventoryItems');
-        const settingRoutes = require('./routes/settings');
-        const studentRoutes = require('./routes/students');
-        const userRoutes = require('./routes/users');
-        const feedbackRoutes = require('./routes/feedback');
-
-        const uploadRoutes = require('./routes/upload');
-        const notificationRoutes = require('./routes/notification');
-        const scheduler = require('./services/scheduler');
-
-        // Initialize Scheduler
-        scheduler.init();
-
-        app.use('/api/payments', paymentRoutes);
-        app.use('/api/menu', menuRoutes);
-        app.use('/api/announcements', announcementRoutes);
-        app.use('/api/complaints', complaintRoutes);
-        app.use('/api/inventory', inventoryRoutes);
-        app.use('/api/settings', settingRoutes);
-        app.use('/api/students', studentRoutes);
-        app.use('/api/users', userRoutes);
-        app.use('/api/feedback', feedbackRoutes);
-
-        app.use('/api/upload', uploadRoutes);
-        app.use('/api/notifications', notificationRoutes);
-        app.use('/api/verify', require('./routes/verify'));
-        app.use('/api/plans', require('./routes/plans'));
-
-        // Serve uploaded files statically
-        app.use('/uploads', express.static('uploads'));
-
-        app.get('/ping', (req, res) => {
-            res.status(200).send('pong');
-        });
-
-        app.get('/', (req, res) => {
-            res.send('Finolex Canteen Server is Running');
-        });
-
-        // Start Server only after DB connection
-        app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
     })
     .catch((err) => console.error('MongoDB connection error:', err));
+
+// Routes
+const paymentRoutes = require('./routes/payments');
+const menuRoutes = require('./routes/menuItems');
+const announcementRoutes = require('./routes/announcements');
+const complaintRoutes = require('./routes/complaints');
+const inventoryRoutes = require('./routes/inventoryItems');
+const settingRoutes = require('./routes/settings');
+const studentRoutes = require('./routes/students');
+const userRoutes = require('./routes/users');
+const feedbackRoutes = require('./routes/feedback');
+
+const uploadRoutes = require('./routes/upload');
+const notificationRoutes = require('./routes/notification');
+const scheduler = require('./services/scheduler');
+
+// Initialize Scheduler
+scheduler.init();
+
+app.use('/payments', paymentRoutes);
+app.use('/menu', menuRoutes);
+app.use('/announcements', announcementRoutes);
+app.use('/complaints', complaintRoutes);
+app.use('/inventory', inventoryRoutes);
+app.use('/settings', settingRoutes);
+app.use('/students', studentRoutes);
+app.use('/users', userRoutes);
+app.use('/feedback', feedbackRoutes);
+
+app.use('/upload', uploadRoutes);
+app.use('/notifications', notificationRoutes);
+app.use('/verify', require('./routes/verify'));
+app.use('/plans', require('./routes/plans'));
+
+// Serve uploaded files statically
+app.use('/uploads', express.static('uploads'));
+
+app.get('/ping', (req, res) => {
+    res.status(200).send('pong');
+});
+
+app.get('/', (req, res) => {
+    res.send('Finolex Canteen Server is Running');
+});
+
+// Start Server locally if not in Cloud Functions
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}
+
+exports.api = functions.https.onRequest(app);
