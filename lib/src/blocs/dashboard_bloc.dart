@@ -19,9 +19,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     on<DashboardRefreshRequested>(_onRefreshRequested);
     on<DashboardNotificationCheck>(_onNotificationCheck);
 
-    // Start polling every 2 minutes
-    _timer = Timer.periodic(const Duration(minutes: 2), (_) {
+    // Start polling every 30 seconds (Matching Backend Scheduler)
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       add(DashboardNotificationCheck());
+      // Silently refresh user data to keep Active Plans & Balance in sync
+      add(DashboardLoadRequested(silent: true));
     });
   }
 
@@ -35,7 +37,9 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     DashboardLoadRequested event,
     Emitter<DashboardState> emit,
   ) async {
-    emit(DashboardLoading());
+    if (!event.silent) {
+      emit(DashboardLoading());
+    }
     try {
       final api = ApiService();
       final response = await api.get('/announcements');
@@ -54,10 +58,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final roomNumber = hostelDetails['roomNo'] ?? 'N/A';
 
       // Extract activePlans
-      final List<Map<String, dynamic>> activePlans =
-          user?['activePlans'] != null
-          ? List<Map<String, dynamic>>.from(user!['activePlans'])
-          : [];
+      // Extract activePlans (Filter out 'paid' ones)
+      final List<Map<String, dynamic>> activePlans = [];
+      if (user != null && user['activePlans'] != null) {
+        for (var plan in user['activePlans']) {
+          if (plan['status'] != 'paid') {
+            activePlans.add(Map<String, dynamic>.from(plan));
+          }
+        }
+      }
+
+      print(
+        '[DashboardBloc] User Refresh: Balance=$balance, ActivePlans=${activePlans.length}',
+      );
 
       // Fetch birthdays
       final birthdayResponse = await api.get('/students/birthdays/today');
@@ -172,6 +185,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       } catch (e) {
         print('[DashboardBloc] Error fetching plan: $e');
       }
+
+      // Client-Side Scheduler REMOVED. Backend (students.js) now handles Lazy Sync + Balance Addition.
 
       // Adjust balance to include 'Completed' transactions which are legacy/unsynced
       // In the new "Balance = Debt" model, we generally expect balance to be correct from backend.

@@ -3,6 +3,70 @@ const router = express.Router();
 const Plan = require('../models/Plan');
 const Student = require('../models/Student');
 
+// ⚠️ MANUAL TRIGGER FOR GLOBAL SYNC
+// Run this to force all student profiles to update immediately
+router.get('/force-sync/all', async (req, res) => {
+    try {
+        console.log('[Manual Trigger] Running Global Plan Sync');
+        const allPlans = await Plan.find({});
+        const activeDbPlans = allPlans.filter(p => p.active === true || String(p.active) === 'true');
+        const allPlanIds = new Set(allPlans.map(p => p._id.toString()));
+
+        const students = await Student.find({});
+        let totalUpdated = 0;
+
+        for (const student of students) {
+            let modified = false;
+
+            // A. Add Missing Active Plans
+            for (const dbPlan of activeDbPlans) {
+                const alreadyHas = student.activePlans.some(p => p.planId.toString() === dbPlan._id.toString());
+                if (!alreadyHas) {
+                    student.activePlans.push({
+                        planId: dbPlan._id,
+                        name: dbPlan.name,
+                        price: dbPlan.price ?? dbPlan.amount ?? 0,
+                        startDate: dbPlan.startDate,
+                        endDate: dbPlan.endDate,
+                        status: 'pending',
+                        addedAt: new Date()
+                    });
+                    modified = true;
+                }
+            }
+
+            // B. Remove Deleted Plans
+            const initialCount = student.activePlans.length;
+            student.activePlans = student.activePlans.filter(p => allPlanIds.has(p.planId.toString()));
+            if (student.activePlans.length !== initialCount) {
+                modified = true;
+            }
+
+            // C. Always Recalculate Balance
+            const newBalance = student.activePlans
+                .filter(p => p.status === 'pending')
+                .reduce((sum, p) => sum + p.price, 0);
+
+            if (student.balance !== newBalance) {
+                modified = true;
+                student.balance = newBalance;
+                student.paymentStatus = student.balance > 0 ? "pending" : "paid";
+            }
+
+            if (modified) {
+                await student.save();
+                totalUpdated++;
+            }
+        }
+
+        console.log(`[Manual Trigger] Updated profiles for ${totalUpdated} students.`);
+        res.json({ message: `Sync Complete. ${totalUpdated} students updated.` });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // Get active plan
 router.get('/', async (req, res) => {
     try {

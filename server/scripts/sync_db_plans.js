@@ -10,44 +10,28 @@ const syncPlans = async () => {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log('MongoDB Connected');
 
-        // 1. Fetch ALL Active Plans from DB
-        const dbPlans = await Plan.find({ active: true });
-        console.log(`Found ${dbPlans.length} active plans in DB:`);
-        dbPlans.forEach(p => console.log(` - ${p.name} (${p.price})`));
+        const allPlans = await Plan.find({});
+        const activeDbPlans = allPlans.filter(p => p.active === true || String(p.active) === 'true');
+        const allPlanIds = new Set(allPlans.map(p => p._id.toString()));
 
-        if (dbPlans.length === 0) {
-            console.warn('WARNING: No active plans found in DB. Students will have 0 plans.');
-        }
-
+        console.log(`Found ${activeDbPlans.length} active plans in DB.`);
         const students = await Student.find({});
         console.log(`Syncing ${students.length} students...`);
 
-        for (const student of students) {
-            // We want to REPLACE the student's activePlans with the dbPlans.
-            // But if they have already paid for one of them, we should preserve that status?
-            // The user said "fetch from the database", implying the structure comes from there.
-            // Since we are "fixing" it, let's assume all are 'pending' unless we can match by ID.
+        let totalUpdated = 0;
 
-            const newActivePlans = [];
+        for (const student of students) {
             let modified = false;
 
-            for (const dbPlan of dbPlans) {
-                // Check if student already has this plan (by ID)
-                // We use .equals for ObjectId comparison or string conversion
-                const existing = student.activePlans.find(p =>
-                    p.planId && p.planId.toString() === dbPlan._id.toString()
-                );
-
-                if (existing) {
-                    // Keep existing status (e.g. if they paid part of it, though structure is simple)
-                    newActivePlans.push(existing);
-                } else {
-                    // Add new
+            // A. Add Missing Active Plans
+            for (const dbPlan of activeDbPlans) {
+                const alreadyHas = student.activePlans.some(p => p.planId.toString() === dbPlan._id.toString());
+                if (!alreadyHas) {
                     console.log(`   + Adding "${dbPlan.name}" to ${student.name}`);
-                    newActivePlans.push({
+                    student.activePlans.push({
                         planId: dbPlan._id,
                         name: dbPlan.name,
-                        price: dbPlan.price,
+                        price: dbPlan.price ?? dbPlan.amount ?? 0,
                         startDate: dbPlan.startDate,
                         endDate: dbPlan.endDate,
                         status: 'pending',
@@ -57,33 +41,31 @@ const syncPlans = async () => {
                 }
             }
 
-            // Check if we removed any (e.g. Special Feast)
-            if (student.activePlans.length !== newActivePlans.length) {
-                console.log(`   - Removed ${student.activePlans.length - newActivePlans.length} invalid/old plans for ${student.name}`);
+            // B. Remove Deleted Plans
+            const initialCount = student.activePlans.length;
+            student.activePlans = student.activePlans.filter(p => allPlanIds.has(p.planId.toString()));
+            if (student.activePlans.length !== initialCount) {
+                console.log(`   - Removed ${initialCount - student.activePlans.length} deleted plans from ${student.name}`);
                 modified = true;
             }
 
-            // Update Plans
-            student.activePlans = newActivePlans;
-
-            // Recalculate Balance
-            const totalPending = student.activePlans
+            // C. Always Recalculate Balance
+            const newBalance = student.activePlans
                 .filter(p => p.status === 'pending')
                 .reduce((sum, p) => sum + p.price, 0);
 
-            if (student.balance !== totalPending) {
-                console.log(`   * Adjusted balance for ${student.name}: ${student.balance} -> ${totalPending}`);
-                student.balance = totalPending;
+            if (student.balance !== newBalance) {
                 modified = true;
+                student.balance = newBalance;
+                student.paymentStatus = student.balance > 0 ? "pending" : "paid";
             }
 
             if (modified) {
                 await student.save();
-                // console.log(`     Saved.`);
+                totalUpdated++;
             }
         }
-
-        console.log('Sync Complete!');
+        console.log(`Sync Complete! Updated ${totalUpdated} profiles.`);
 
     } catch (err) {
         console.error(err);

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import '../theme/colors.dart';
-import '../theme/neumorphism.dart';
 
 class SoftAskDialog extends StatelessWidget {
   final VoidCallback onAllow;
@@ -20,20 +19,41 @@ class SoftAskDialog extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 32),
         padding: const EdgeInsets.all(28),
-        decoration: NeumorphicStyle.cardDecoration(context, borderRadius: 30),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: AppColors.textPrimary(context).withOpacity(0.08),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
         child: Material(
           color: Colors.transparent,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Lottie Animation for Notifications
-              Lottie.asset(
-                'assets/lottie/bell_notification.json',
-                height: 120,
-                repeat: true,
+              // Highlight Icon/Animation Area
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.05),
+                  shape: BoxShape.circle,
+                ),
+                child: Lottie.asset(
+                  'assets/lottie/bell_notification.json',
+                  height: 100,
+                  repeat: true,
+                ),
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 24),
 
               Text(
                 'Don\'t Miss a Meal!',
@@ -41,18 +61,19 @@ class SoftAskDialog extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
                   color: AppColors.textPrimary(context),
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               Text(
                 'Enable notifications to receive daily meal reminders, menu updates, and important announcements.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.roboto(
                   fontSize: 14,
-                  height: 1.5,
+                  height: 1.6,
                   color: AppColors.textSecondary(context),
                 ),
               ),
@@ -63,38 +84,40 @@ class SoftAskDialog extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  GestureDetector(
-                    onTap: onAllow,
-                    child: Container(
+                  ElevatedButton(
+                    onPressed: onAllow,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: NeumorphicStyle.buttonDecoration(
-                        context,
-                        color: AppColors.primary,
-                        borderRadius: 15,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Center(
-                        child: Text(
-                          'Notify Me',
-                          style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    ),
+                    child: Text(
+                      'Notify Me',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  GestureDetector(
-                    onTap: onDecline,
-                    child: Center(
-                      child: Text(
-                        'Maybe Later',
-                        style: GoogleFonts.poppins(
-                          color: AppColors.textSecondary(context),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: onDecline,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(
+                      'Maybe Later',
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSecondary(context),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),

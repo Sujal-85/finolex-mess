@@ -34,15 +34,51 @@ router.post('/login', async (req, res) => {
         if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
 
         // Auto-correct / Read-Repair Logic (Login)
-        // Check if balance covers base fee, if so clear fine.
-        const baseFee = await getActivePlanPrice();
-        const remainingBaseDues = baseFee - student.balance;
+        // 1. LAZY SYNC: Fetch all plans to ensure student profile is up-to-date
+        // This handles cases where Plans are created/deleted on the Admin Backend (Render)
+        // but this Student Backend (Firebase) didn't receive the trigger.
+        const allPlans = await Plan.find({});
+        const activeDbPlans = allPlans.filter(p => p.active === true || String(p.active) === 'true');
+        const allPlanIds = new Set(allPlans.map(p => p._id.toString()));
 
-        if (remainingBaseDues <= 0 && (student.paymentStatus !== 'paid' || student.fineAmount > 0)) {
-            student.paymentStatus = 'paid';
-            student.fineAmount = 0;
+        let modified = false;
+
+        // A. Add Missing Active Plans
+        for (const dbPlan of activeDbPlans) {
+            const alreadyHas = student.activePlans.some(p => p.planId.toString() === dbPlan._id.toString());
+            if (!alreadyHas) {
+                console.log(`[Lazy Sync] Adding missing plan ${dbPlan.name} to ${student.name}`);
+                student.activePlans.push({
+                    planId: dbPlan._id,
+                    name: dbPlan.name,
+                    price: dbPlan.price ?? dbPlan.amount ?? 0,
+                    startDate: dbPlan.startDate,
+                    endDate: dbPlan.endDate,
+                    status: 'pending',
+                    addedAt: new Date()
+                });
+                // Update Balance (Add, don't replace)
+                const planPrice = dbPlan.price ?? dbPlan.amount ?? 0;
+                student.balance = (student.balance || 0) + planPrice;
+                student.paymentStatus = student.balance > 0 ? "pending" : "paid";
+
+                modified = true;
+            }
+        }
+
+        // B. Remove Deleted Plans (Zombie Cleanups)
+        const initialCount = student.activePlans.length;
+        student.activePlans = student.activePlans.filter(p => allPlanIds.has(p.planId.toString()));
+        if (student.activePlans.length !== initialCount) {
+            console.log(`[Lazy Sync] Removed ${initialCount - student.activePlans.length} deleted plans from ${student.name}`);
+            modified = true;
+        }
+
+        // C. Recalculation REMOVED to prevent balance reversion.
+
+        if (modified) {
             await student.save();
-            console.log(`[Login Read-Repair] Student ${student.name} marked as PAID.`);
+            console.log(`[Lazy Sync] Updated profile for ${student.name}. New Balance: ${student.balance}`);
         }
 
         const token = jwt.sign({ id: student._id }, JWT_SECRET, { expiresIn: '1h' });
@@ -68,21 +104,55 @@ router.get('/:id', async (req, res) => {
         const student = await Student.findById(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
 
-        // Auto-correct / Read-Repair Logic
-        // If balance is sufficient to cover BASE fees, we assume they paid and clear fines.
-        // User Requirement: "fine will be add to the pending amt students only" (implies if base is paid, no fine)
-        const baseFee = await getActivePlanPrice();
-        const remainingBaseDues = baseFee - student.balance;
 
-        if (remainingBaseDues <= 0 && (student.paymentStatus !== 'paid' || student.fineAmount > 0)) {
-            student.paymentStatus = 'paid';
-            student.fineAmount = 0;
+        // Auto-correct / Read-Repair Logic
+        // 1. LAZY SYNC: Fetch all plans to ensure student profile is up-to-date
+        const allPlans = await Plan.find({});
+        const activeDbPlans = allPlans.filter(p => p.active === true || String(p.active) === 'true');
+        const allPlanIds = new Set(allPlans.map(p => p._id.toString()));
+
+        let modified = false;
+
+        // A. Add Missing Active Plans
+        for (const dbPlan of activeDbPlans) {
+            const alreadyHas = student.activePlans.some(p => p.planId.toString() === dbPlan._id.toString());
+            if (!alreadyHas) {
+                console.log(`[Lazy Sync] Adding missing plan ${dbPlan.name} to ${student.name}`);
+                student.activePlans.push({
+                    planId: dbPlan._id,
+                    name: dbPlan.name,
+                    price: dbPlan.price ?? dbPlan.amount ?? 0,
+                    startDate: dbPlan.startDate,
+                    endDate: dbPlan.endDate,
+                    status: 'pending',
+                    addedAt: new Date()
+                });
+
+                // Update Balance (Add, don't replace)
+                const planPrice = dbPlan.price ?? dbPlan.amount ?? 0;
+                student.balance = (student.balance || 0) + planPrice;
+                student.paymentStatus = student.balance > 0 ? "pending" : "paid";
+
+                modified = true;
+            }
+        }
+
+        // B. Remove Deleted Plans
+        const initialCount = student.activePlans.length;
+        student.activePlans = student.activePlans.filter(p => allPlanIds.has(p.planId.toString()));
+        if (student.activePlans.length !== initialCount) {
+            console.log(`[Lazy Sync] Removed ${initialCount - student.activePlans.length} deleted plans from ${student.name}`);
+            modified = true;
+        }
+
+        // C. Recalculation REMOVED to prevent balance reversion.
+
+        if (modified) {
             await student.save();
-            console.log(`[Read-Repair] Student ${student.name} marked as PAID (Base fee covered).`);
         }
 
         const studentData = student.toObject();
-        studentData.monthlyFee = baseFee; // Force dynamic plan price for frontend logic
+        // studentData.monthlyFee = baseFee; // REMOVED: baseFee is undefined
         res.json(studentData);
     } catch (err) {
         res.status(500).json({ message: err.message });

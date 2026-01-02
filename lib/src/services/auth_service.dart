@@ -98,6 +98,11 @@ class AuthService {
         final response = await _apiService.get('/students/${user['id']}');
         if (response.statusCode == 200) {
           final updatedUser = response.data;
+
+          print(
+            '[AuthService] Refreshed User: Balance=${updatedUser['balance']}, ActivePlans=${updatedUser['activePlans']?.length}',
+          );
+
           if (updatedUser['_id'] != null) {
             updatedUser['id'] = updatedUser['_id'];
           }
