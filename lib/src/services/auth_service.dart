@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../utils/error_strings.dart';
 
 class AuthService {
   static const String _tokenKey = 'auth_token';
@@ -10,8 +11,36 @@ class AuthService {
   final ApiService _apiService = ApiService();
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
+  // Cache password in memory for current session
+  String? _cachedPassword;
+  String? get cachedPassword => _cachedPassword;
+
   Future<bool> login(String email, String password) async {
     try {
+      // Bypass for Manager/Admin to access Web Portal
+      if ((email == 'manager@gmail.com' && password == 'manager@123') ||
+          (email == 'admin@famt.com' && password == 'admin@123')) {
+        final mockUser = {
+          'id': 'admin_bypass',
+          'name': email.contains('manager') ? 'Manager' : 'Admin',
+          'email': email,
+          'role': 'admin',
+          'balance': 0, // Mock balance
+        };
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_tokenKey, 'mock_admin_token');
+        await prefs.setString(_userKey, jsonEncode(mockUser));
+
+        // Store password persistently ONLY for bypass accounts to survive app restarts
+        await prefs.setString('bypass_password', password);
+
+        // Cache password for session to enable Web Portal auto-login
+        _cachedPassword = password;
+
+        return true;
+      }
+
       final response = await _apiService.post(
         '/students/login',
         data: {'email': email, 'password': password},
@@ -24,22 +53,15 @@ class AuthService {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_tokenKey, token);
         await prefs.setString(_userKey, jsonEncode(user));
+
+        // Cache password for session
+        _cachedPassword = password;
+
         return true;
       }
       return false;
-    } on DioException catch (e) {
-      String errorMessage = 'Login failed';
-      if (e.response?.data is Map) {
-        errorMessage =
-            e.response?.data['message']?.toString() ??
-            e.message ??
-            'Login failed';
-      } else if (e.message != null) {
-        errorMessage = e.message!;
-      }
-      throw Exception(errorMessage);
     } catch (e) {
-      rethrow;
+      throw ErrorMessages.humanize(e);
     }
   }
 
@@ -55,19 +77,8 @@ class AuthService {
         }
         return {'success': false, 'message': message};
       }
-    } on DioException catch (e) {
-      String errorMessage = 'Registration failed';
-      if (e.response?.data is Map) {
-        errorMessage =
-            e.response?.data['message']?.toString() ??
-            e.message ??
-            'Registration failed';
-      } else if (e.message != null) {
-        errorMessage = e.message!;
-      }
-      return {'success': false, 'message': errorMessage};
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      return {'success': false, 'message': ErrorMessages.humanize(e)};
     }
   }
 
@@ -75,6 +86,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
+    await prefs.remove('bypass_password'); // Clear bypass password
   }
 
   Future<Map<String, dynamic>?> getUser() async {
@@ -290,6 +302,19 @@ class AuthService {
       return {'success': false, 'message': errorMessage};
     } catch (e) {
       return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteAccount(String id) async {
+    try {
+      final response = await _apiService.delete('/students/$id');
+      if (response.statusCode == 200) {
+        await logout(); // Clear local data
+        return {'success': true, 'message': 'Account deleted successfully'};
+      }
+      return {'success': false, 'message': 'Failed to delete account'};
+    } catch (e) {
+      return {'success': false, 'message': ErrorMessages.humanize(e)};
     }
   }
 }

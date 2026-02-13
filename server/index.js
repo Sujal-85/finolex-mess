@@ -77,6 +77,7 @@ const settingRoutes = require('./routes/settings');
 const studentRoutes = require('./routes/students');
 const userRoutes = require('./routes/users');
 const feedbackRoutes = require('./routes/feedback');
+const attendanceRoutes = require('./routes/attendance');
 
 const uploadRoutes = require('./routes/upload');
 const notificationRoutes = require('./routes/notification');
@@ -94,6 +95,7 @@ app.use('/settings', settingRoutes);
 app.use('/students', studentRoutes);
 app.use('/users', userRoutes);
 app.use('/feedback', feedbackRoutes);
+app.use('/attendance', attendanceRoutes);
 
 app.use('/upload', uploadRoutes);
 app.use('/notifications', notificationRoutes);

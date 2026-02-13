@@ -4,7 +4,9 @@ class AppConstants {
   // Recommended: Use a Merchant VPA (e.g., Business Account) for higher success rates.
   static const String canteenVpa = '9860630677@okbizaxis';
   // Tip: If facing "Bank Limit" errors during testing, try paying small amounts (e.g., ₹1 or ₹10) as personal VPAs have strict limits.
-  static const String canteenPayeeName = 'PRASANNA CATERERS';
+  static const String canteenPayeeName = "Prasanna Caterer's";
+  static const String canteenMerchantCode =
+      "5411"; // Grocery Stores/Canteens (Helps GPay verify business)
 
   // Emergency Contacts
   static const String headWardenPhone = '+919823123845'; // Placeholder

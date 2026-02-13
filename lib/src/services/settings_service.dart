@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'api_service.dart';
 import '../models/settings_model.dart';
 
 class SettingsService extends ChangeNotifier {
@@ -49,6 +51,26 @@ class SettingsService extends ChangeNotifier {
     _settings.messAlerts = value;
     notifyListeners();
     await _savePreference('messAlerts', value);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userStr = prefs.getString('auth_user');
+      if (userStr != null) {
+        final user = jsonDecode(userStr);
+        final userId = user['id'] ?? user['_id'];
+        if (userId != null) {
+          final api = ApiService();
+          await api.put(
+            '/students/$userId',
+            data: {
+              'settings': {'messAlerts': value},
+            },
+          );
+        }
+      }
+    } catch (e) {
+      print('Error syncing messAlerts: $e');
+    }
   }
 
   Future<void> togglePaymentUpdates(bool value) async {

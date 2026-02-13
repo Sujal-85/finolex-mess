@@ -105,7 +105,7 @@ router.post('/send-email-otp', async (req, res) => {
 
         const functions = require('firebase-functions');
         // Send to n8n Webhook
-        const webhookUrl = process.env.N8N_EMAIL_WEBHOOK_URL;
+        const webhookUrl = process.env.N8N_EMAIL_WEBHOOK_URL || (functions.config().n8n && functions.config().n8n.email_webhook_url);
 
         if (!webhookUrl) {
             console.warn('N8N_EMAIL_WEBHOOK_URL is not set!');

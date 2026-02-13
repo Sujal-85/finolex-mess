@@ -48,7 +48,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     context.read<DashboardBloc>().add(DashboardLoadRequested());
     // Request permissions after build with a professional soft ask
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _checkNotificationPermission();
+      await _checkNotificationPermission();
+      // Ensure all permissions are requested regardless of soft-ask state to fix blocking issues
+      await LocalNotificationService().requestPermissions();
     });
   }
 
@@ -167,61 +169,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                   final notificationService = LocalNotificationService();
 
                   // Schedule Daily Meal Reminders
-                  notificationService.scheduleDailyNotification(
-                    id: 10,
-                    title: 'Good Morning! ☀️',
-                    body: 'Breakfast is ready! Today: ${state.breakfastItem}',
-                    hour: 8,
-                    minute: 0,
-                  );
-                  notificationService.scheduleDailyNotification(
-                    id: 11,
-                    title: 'Lunch Time! 🍛',
-                    body: 'Lunch is served! Today: ${state.lunchItem}',
-                    hour: 12,
-                    minute: 30,
-                  );
-                  notificationService.scheduleDailyNotification(
-                    id: 12,
-                    title: 'Dinner is Served! 🌙',
-                    body: 'Dinner is ready! Today: ${state.dinnerItem}',
-                    hour: 19,
-                    minute: 30,
-                  );
-
-                  // Schedule Menu Update Notification
-                  notificationService.scheduleDailyNotification(
-                    id: 20,
-                    title: 'Menu Updated 📅',
-                    body:
-                        'Check out today\'s menu including ${state.lunchItem}!',
-                    hour: 7,
-                    minute: 0,
+                  notificationService.scheduleAllMealReminders(
+                    breakfastMenu: state.breakfastItem,
+                    lunchMenu: state.lunchItem,
+                    dinnerMenu: state.dinnerItem,
                   );
 
                   // Schedule Payment Due Notification if balance is low and grace period passed
-                  bool shouldNotify = state.balance < state.messFee;
-                  if (state.planStartDate != null) {
-                    final graceDeadline = state.planStartDate!.add(
-                      const Duration(days: 7),
-                    );
-                    if (DateTime.now().isBefore(graceDeadline)) {
-                      shouldNotify = false; // Silence during grace period
-                    }
-                  }
-
-                  if (shouldNotify) {
-                    notificationService.scheduleDailyNotification(
-                      id: 100,
-                      title: 'Payment Due ⚠️',
-                      body:
-                          'Your mess fees are due. Please pay to avoid penalties.',
-                      hour: 10,
-                      minute: 0,
-                    );
-                  } else {
-                    notificationService.cancelNotification(100);
-                  }
+                  // REMOVED: Local scheduling of Payment Due Notification. Now handled by Backend Scheduler.
+                  // See DashboardBloc for notification handling.
                 }
               },
               child: BlocBuilder<DashboardBloc, DashboardState>(
@@ -283,49 +239,93 @@ class _DashboardScreenState extends State<DashboardScreen>
                     final double fine = state.fineAmount;
                     final DateTime now = DateTime.now();
 
-                    double dynamicFine = 0.0; // Initialize dynamic fine
+                    double dynamicFine = 0.0;
+                    String dueDateDisplay =
+                        '10th ${DateFormat('MMM').format(now)}';
+                    DateTime? topPlanStart;
 
-                    // Show due date from plan (8th day) or backend or default to 10th
-                    String dueDateDisplay;
-                    bool isGracePeriod = false;
+                    // 1. Find Top Unpaid Plan Logic (Queue)
+                    List<Map<String, dynamic>> unpaidPlans = state.activePlans
+                        .where((p) {
+                          final status = p['status']?.toString().toLowerCase();
+                          return status != 'paid' && status != 'Success';
+                        })
+                        .toList();
 
-                    if (state.planStartDate != null) {
-                      final eighthDay = state.planStartDate!.add(
-                        const Duration(days: 7),
-                      ); // 8th Day
-                      dueDateDisplay =
-                          '${eighthDay.day}th ${DateFormat('MMM').format(eighthDay)}';
+                    unpaidPlans.sort((a, b) {
+                      DateTime? d1 = DateTime.tryParse(
+                        a['startDate']?.toString() ?? '',
+                      );
+                      DateTime? d2 = DateTime.tryParse(
+                        b['startDate']?.toString() ?? '',
+                      );
+                      if (d1 == null) return 1;
+                      if (d2 == null) return -1;
+                      return d1.compareTo(d2);
+                    });
 
-                      // Calculate Dynamic Fine: ₹5 per day past eighthDay
-                      if (now.isAfter(eighthDay)) {
+                    if (unpaidPlans.isNotEmpty) {
+                      final topPlan = unpaidPlans.first;
+                      final sDate = DateTime.tryParse(
+                        topPlan['startDate'].toString(),
+                      );
+
+                      if (sDate != null) {
+                        topPlanStart = sDate;
+                        // User Rule: 10 Days from Start Date
+                        final dueDate = sDate.add(const Duration(days: 10));
+                        dueDateDisplay =
+                            '${dueDate.day}th ${DateFormat('MMM').format(dueDate)}';
+
+                        // Calculate Fine: ₹5 per day AFTER due date
                         final today = DateTime(now.year, now.month, now.day);
-                        final due = DateTime(
-                          eighthDay.year,
-                          eighthDay.month,
-                          eighthDay.day,
+                        final dueThreshold = DateTime(
+                          dueDate.year,
+                          dueDate.month,
+                          dueDate.day,
                         );
-                        final diffDays = today.difference(due).inDays;
+
+                        // If today is AFTER the 10th day
+                        if (today.isAfter(dueThreshold)) {
+                          final diffDays = today
+                              .difference(dueThreshold)
+                              .inDays;
+                          if (diffDays > 0) {
+                            dynamicFine = diffDays * 5.0;
+                          }
+                        }
+                      }
+                    } else if (state.planStartDate != null) {
+                      // Fallback to global active plan if no specific queue found
+                      final sDate = state.planStartDate!;
+                      final dueDate = sDate.add(const Duration(days: 10));
+                      dueDateDisplay =
+                          '${dueDate.day}th ${DateFormat('MMM').format(dueDate)}';
+
+                      final today = DateTime(now.year, now.month, now.day);
+                      final dueThreshold = DateTime(
+                        dueDate.year,
+                        dueDate.month,
+                        dueDate.day,
+                      );
+
+                      if (today.isAfter(dueThreshold)) {
+                        final diffDays = today.difference(dueThreshold).inDays;
                         if (diffDays > 0) {
                           dynamicFine = diffDays * 5.0;
                         }
-                      } else {
-                        isGracePeriod = true;
                       }
-                    } else {
-                      dueDateDisplay = state.paymentDueDate != null
-                          ? '${state.paymentDueDate!.day}th ${DateFormat('MMM').format(state.paymentDueDate!)}'
-                          : '10th ${DateFormat('MMM').format(now)}';
                     }
 
                     // Final effective fine to show
                     final double effectiveFine = (state.balance <= 0)
                         ? 0.0
-                        : dynamicFine; // If balance (Debt) <= 0, no fine
+                        : dynamicFine;
 
                     double currentBalance = (state.balance ?? 0).toDouble();
 
-                    // NEW LOGIC: Balance IS the Debt.
-                    // Outstanding = Balance (Debt) + Fine - Pending Payments
+                    // NEW LOGIC: Add Calculated Fine to Balance
+                    // Per user: "calculate ... and added that instead of fetching value"
                     double outstanding =
                         currentBalance + effectiveFine - pendingAmount;
                     if (outstanding < 0) outstanding = 0;
@@ -410,7 +410,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                               pendingAmount: pendingAmount,
                                               dueDate: dueDateDisplay,
                                               fineAmount: effectiveFine.toInt(),
-                                              startDate: state.planStartDate,
+                                              startDate:
+                                                  topPlanStart ??
+                                                  state.planStartDate,
                                               endDate: state.planEndDate,
                                               activePlans: state.activePlans,
                                               onPayNow: () async {
@@ -576,6 +578,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                                                 //   Colors.blue,
                                                 //   () => context.push('/history'),
                                                 // ),
+                                                _buildCompactAction(
+                                                  'Attendance',
+                                                  Icons.calendar_today,
+                                                  Colors.blueAccent,
+                                                  () => context.push(
+                                                    '/attendance',
+                                                  ),
+                                                ),
                                                 _buildCompactAction(
                                                   'Complaints',
                                                   Icons.report_problem_outlined,
@@ -972,8 +982,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       );
     }
 
-    // Show only top 3 transactions
-    final recent = transactions.take(3).toList();
+    // Show only top 10 transactions
+    final recent = transactions.take(10).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

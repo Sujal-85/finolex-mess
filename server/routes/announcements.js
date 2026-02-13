@@ -23,9 +23,9 @@ router.post('/', async (req, res) => {
 
         // Create global notification
         const notification = new Notification({
-            userId: null, // Global notification
+            recipient: null, // Global notification
             title: `New Announcement: ${newAnnouncement.title}`,
-            description: newAnnouncement.description,
+            message: newAnnouncement.description,
             type: 'news'
         });
         await notification.save();

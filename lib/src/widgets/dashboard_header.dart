@@ -86,6 +86,7 @@ class DashboardHeader extends StatelessWidget {
             child: Stack(
               children: [
                 NeumorphicCard(
+                  onTap: onNotificationTap,
                   borderRadius: 12,
                   padding: const EdgeInsets.all(10),
                   child: Icon(

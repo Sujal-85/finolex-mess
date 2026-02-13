@@ -15,7 +15,6 @@ import 'package:workmanager/workmanager.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -31,11 +30,13 @@ void main() async {
     webProvider: ReCaptchaV3Provider('6Lcj-R8qAAAAAB7P6V5V0V3V'),
   );
 
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark, // For Android (dark icons)
-      statusBarBrightness: Brightness.light, // For iOS (dark icons)
+      systemNavigationBarColor: Colors.transparent, // For Edge-to-Edge
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
     ),
   );
 
@@ -74,14 +75,16 @@ Future<void> _initNotifications() async {
       body: 'Breakfast is ready. Start your day with a healthy meal!',
       hour: 8,
       minute: 0,
+      channelId: 'breakfast_channel',
     );
 
     await notificationService.scheduleDailyNotification(
       id: 2,
       title: 'Lunch Time!',
       body: 'Lunch is being served. Check out today\'s menu.',
-      hour: 12,
-      minute: 30,
+      hour: 11,
+      minute: 0,
+      channelId: 'lunch_channel',
     );
 
     await notificationService.scheduleDailyNotification(
@@ -90,6 +93,7 @@ Future<void> _initNotifications() async {
       body: 'Dinner is ready. Don\'t miss it!',
       hour: 19,
       minute: 30,
+      channelId: 'dinner_channel',
     );
   } catch (e) {
     debugPrint('Error initializing notifications: $e');
@@ -164,70 +168,9 @@ Future<void> _checkAndSendPendingReminder(
   SharedPreferences prefs,
   LocalNotificationService notificationService,
 ) async {
-  try {
-    // Check constraints: Max 2 times per day
-    final String todayDate = DateTime.now().toIso8601String().split('T')[0];
-    final String lastDate = prefs.getString('last_pending_reminder_date') ?? '';
-    int dailyCount = prefs.getInt('daily_pending_reminder_count') ?? 0;
-
-    if (lastDate != todayDate) {
-      // Reset for new day
-      dailyCount = 0;
-      await prefs.setString('last_pending_reminder_date', todayDate);
-      await prefs.setInt('daily_pending_reminder_count', 0);
-    }
-
-    if (dailyCount >= 2) {
-      return;
-    }
-
-    // Check Balance/Pending Status
-    final response = await ApiService().get('/students/$studentId');
-    if (response.statusCode == 200) {
-      final student = response.data;
-
-      // 1. Strict Payment Status Check
-      final String paymentStatus = (student['paymentStatus'] ?? '')
-          .toString()
-          .toLowerCase();
-      if (paymentStatus == 'paid') {
-        return; // Stop immediately if status is explicitly paid
-      }
-
-      final double balance = (student['balance'] ?? 0).toDouble();
-      final double monthlyFee = (student['monthlyFee'] ?? 3500).toDouble();
-      final double fineAmount = (student['fineAmount'] ?? 0).toDouble();
-      double totalFee = monthlyFee + fineAmount;
-
-      if (balance >= monthlyFee) {
-        totalFee = monthlyFee;
-      }
-
-      final double remainingDues = totalFee > balance ? totalFee - balance : 0;
-
-      // 2. Tolerance Check (ignore < ₹1) & Status Re-verification
-      if (remainingDues > 1.0 && paymentStatus != 'paid') {
-        final List<String> messages = [
-          'Reminder: You have pending due of ₹$remainingDues. Please pay soon!',
-          'Don\'t forget to clear your canteen dues of ₹$remainingDues.',
-          'Pending Payment Alert: ₹$remainingDues remaining. Avoid late fees!',
-        ];
-
-        final random = Random();
-        final String message = messages[random.nextInt(messages.length)];
-
-        await notificationService.showNotification(
-          id: 999,
-          title: 'Pending Payment ⚠️',
-          body: message,
-        );
-
-        await prefs.setInt('daily_pending_reminder_count', dailyCount + 1);
-      }
-    }
-  } catch (e) {
-    debugPrint('Error in pending reminder check: $e');
-  }
+  // REMOVED: Local Pending Payment Calculation.
+  // Now handled by Backend Scheduler which sends urgent notifications.
+  return;
 }
 
 // 3. Meal Reminder Logic (Disabled: Using exact scheduling instead)

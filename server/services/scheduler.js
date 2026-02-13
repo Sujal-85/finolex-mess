@@ -1,12 +1,68 @@
 const cron = require('node-cron');
 const Notification = require('../models/Notification');
 const Student = require('../models/Student');
-
+const admin = require('./firebase'); // Import Firebase Admin
 const axios = require('axios');
 
 const scheduler = {
     init: () => {
         console.log('Scheduler initialized...');
+
+        // Helper: Send Global FCM
+        const sendGlobalFCM = async (title, body) => {
+            try {
+                // Fetch students with tokens
+                // Fetch students with tokens
+                const students = await Student.find({
+                    fcmToken: { $exists: true, $ne: null },
+                    'settings.messAlerts': { $ne: false } // Only send if NOT explicitly disabled
+                }).select('fcmToken');
+
+                const tokens = students
+                    .map(s => s.fcmToken)
+                    .filter(t => t && t.length > 0);
+
+                if (tokens.length > 0) {
+                    console.log(`Sending Global FCM to ${tokens.length} devices...`);
+                    // Firebase multicast (batches of 500 automatically handled by sendEachForMulticast usually, 
+                    // but for safety with large numbers, we strictly rely on sendEachForMulticast's array handling)
+                    // sendEachForMulticast accepts up to 500 tokens per call.
+
+                    const batchSize = 500;
+                    for (let i = 0; i < tokens.length; i += batchSize) {
+                        const batchTokens = tokens.slice(i, i + batchSize);
+                        if (batchTokens.length > 0) {
+                            await admin.messaging().sendEachForMulticast({
+                                notification: { title, body },
+                                android: {
+                                    priority: 'high',
+                                    notification: {
+                                        color: '#3498db',
+                                        sound: 'default',
+                                        priority: 'high',
+                                        icon: 'ic_launcher',
+                                        channelId: 'high_importance_channel'
+                                    }
+                                },
+                                apns: {
+                                    payload: {
+                                        aps: {
+                                            sound: 'default'
+                                        }
+                                    }
+                                },
+                                tokens: batchTokens
+                            });
+                        }
+                    }
+                    console.log('Global FCM sent successfully.');
+                } else {
+                    console.log('No FCM tokens found for global broadcast.');
+                }
+            } catch (error) {
+                console.error('Error sending Global FCM:', error);
+            }
+        };
 
         // Keep-Alive Ping (Every 10 minutes)
         // Pings the public URL to prevent Render from sleeping
@@ -25,12 +81,19 @@ const scheduler = {
         cron.schedule('0 8 * * *', async () => {
             console.log('Running Morning Greeting Job');
             try {
+                const title = 'Good Morning!';
+                const description = 'Breakfast is ready. Start your day with a healthy meal!';
+
                 const notification = new Notification({
-                    title: 'Good Morning!',
-                    description: 'Breakfast is ready. Start your day with a healthy meal!',
+                    title: title,
+                    description: description,
                     type: 'mess'
                 });
                 await notification.save();
+
+                // Send FCM
+                await sendGlobalFCM(title, description);
+
                 console.log('Morning greeting sent.');
             } catch (error) {
                 console.error('Error sending morning greeting:', error);
@@ -43,12 +106,19 @@ const scheduler = {
         cron.schedule('30 12 * * *', async () => {
             console.log('Running Lunch Reminder Job');
             try {
+                const title = 'Lunch Time!';
+                const description = 'Lunch is being served. Check out today\'s menu.';
+
                 const notification = new Notification({
-                    title: 'Lunch Time!',
-                    description: 'Lunch is being served. Check out today\'s menu.',
+                    title: title,
+                    description: description,
                     type: 'mess'
                 });
                 await notification.save();
+
+                // Send FCM
+                await sendGlobalFCM(title, description);
+
                 console.log('Lunch reminder sent.');
             } catch (error) {
                 console.error('Error sending lunch reminder:', error);
@@ -58,9 +128,27 @@ const scheduler = {
         });
 
         // Dinner Reminder (Every day at 7:30 PM IST)
+        // Dinner Reminder (Every day at 7:30 PM IST)
         cron.schedule('30 19 * * *', async () => {
-            // ... (existing code for dinner)
-            // ...
+            console.log('Running Dinner Reminder Job');
+            try {
+                const title = 'Dinner Time!';
+                const description = 'Dinner is ready. Have a pleasant evening!';
+
+                const notification = new Notification({
+                    title: title,
+                    description: description,
+                    type: 'mess'
+                });
+                await notification.save();
+
+                // Send FCM
+                await sendGlobalFCM(title, description);
+
+                console.log('Dinner reminder sent.');
+            } catch (error) {
+                console.error('Error sending dinner reminder:', error);
+            }
         }, {
             timezone: "Asia/Kolkata"
         });
@@ -177,64 +265,114 @@ const scheduler = {
         }, { timezone: "Asia/Kolkata" });
 
         // 2. Daily Fine Calculation (Every Midnight)
-        // If not paid by 8th day of plan, add 5 rupees fine daily
+        // If balance > 0 after 10 days of plan start, add 5 rupees fine daily to balance
         cron.schedule('0 0 * * *', async () => {
             console.log('Running Daily Fine Calculation Job');
             try {
                 const Plan = require('../models/Plan');
+                // We should probably check each student's specific active plans if they have different start dates,
+                // but for now, assuming a global plan start date structure as per existing code, or checking student's active plans.
+                // The existing code relied on a global active plan. 
+                // However, students might have specific activePlans. 
+                // Let's stick to the existing pattern of fetching the global active plan for reference, 
+                // but strictly speaking, we should check the student's specific plan start date if available.
+
                 const plan = await Plan.findOne({ active: true });
-                if (!plan || !plan.startDate) return;
+                // If no global plan, we might surely skip? Or should we check student specific plans?
+                // The user request implies: "10 days due date form the starting date of the plan".
+                // Let's proceed with finding students who have active plans.
 
-                const now = new Date();
-                const eighthDay = new Date(plan.startDate);
-                eighthDay.setDate(eighthDay.getDate() + 7);
-
-                if (now < eighthDay) {
-                    console.log('Skipping fine calculation (Before 8th day of plan).');
-                    return;
-                }
-
-                // Find students who are overdue OR pending (and 8th day crossed)
+                // Find students with balance > 0
                 const targetStudents = await Student.find({
-                    paymentStatus: { $in: ['pending', 'overdue'] }
+                    balance: { $gt: 0 }
                 });
 
                 const fineNotifications = [];
 
                 for (const student of targetStudents) {
-                    const planPrice = plan.price ?? 3500;
-                    const totalFee = planPrice + (student.fineAmount || 0);
-                    const remainingDues = totalFee - student.balance;
+                    // Check student's active plans to find the relevant start date
+                    // If multiple plans, logic might be complex. User said "queue at the top".
+                    // For fine calculation, if ANY plan is overdue (10 days passed) and balance > 0, we charge fine?
+                    // User says: "If balance is > 0 after the (10 days due date form the starting date of the plan) 10 days fine will be start"
+                    // So we need to find the earliest active plan? Or just THE plan.
 
-                    if (remainingDues <= 0) {
-                        student.paymentStatus = 'paid';
-                        student.fineAmount = 0;
-                        await student.save();
-                        continue;
+                    // Fallback to global plan start date if student has no specific active plans with dates
+                    let planStartDate = plan?.startDate;
+
+                    // BETTER LOGIC: Use the student's activePlans array.
+                    if (student.activePlans && student.activePlans.length > 0) {
+                        // Find the earliest 'pending' plan? or just the active one?
+                        // "starting date of the plan"
+                        // usage of global plan.startDate in previous code suggests a synchronous start for everyone?
+                        // Let's use the student's first active plan start date if available.
+                        const activePlan = student.activePlans.find(p => p.status === 'pending' || p.status === 'paid'); // usually pending ones matter
+                        if (activePlan && activePlan.startDate) {
+                            planStartDate = activePlan.startDate;
+                        }
                     }
 
-                    // Calculate Dynamic Fine: ₹5 per day past the 8th day
-                    const diffTime = Math.abs(now - eighthDay);
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (!planStartDate) continue;
 
-                    const newFineAmount = diffDays * 5;
+                    const now = new Date();
+                    const tenDaysAfterStart = new Date(planStartDate);
+                    tenDaysAfterStart.setDate(tenDaysAfterStart.getDate() + 10);
 
-                    if (student.fineAmount !== newFineAmount) {
-                        student.fineAmount = newFineAmount;
-                        student.paymentStatus = 'overdue';
+                    // Normalize dates to midnight for comparison to avoid time issues
+                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    const thresholdDate = new Date(tenDaysAfterStart.getFullYear(), tenDaysAfterStart.getMonth(), tenDaysAfterStart.getDate());
+
+                    if (today > thresholdDate) {
+                        // "this checking is for every day and charge fine 5 until not pay money"
+                        // "remove that [fine field] and starting adding fine in the balance only"
+
+                        student.balance += 5;
                         await student.save();
 
                         fineNotifications.push({
                             userId: student._id,
                             title: 'Daily Fine Applied',
-                            description: `A fine of ₹5/day has been applied. Total Fine: ₹${student.fineAmount}.`,
+                            description: `A fine of ₹5 has been added to your balance due to overdue payment.`,
                             type: 'urgent'
                         });
+                        console.log(`Applied fine to student ${student.name} (${student._id}). New Balance: ${student.balance}`);
                     }
                 }
 
                 if (fineNotifications.length > 0) {
                     await Notification.insertMany(fineNotifications);
+
+                    // SEND FCM for Fines
+                    // We need to fetch tokens for the users in fineNotifications
+                    const userIds = fineNotifications.map(n => n.userId);
+                    const finedStudentsWithTokens = await Student.find({
+                        _id: { $in: userIds },
+                        fcmToken: { $exists: true, $ne: null }
+                    }).select('fcmToken');
+
+                    const tokens = finedStudentsWithTokens.map(s => s.fcmToken);
+
+                    if (tokens.length > 0) {
+                        const batchSize = 500;
+                        for (let i = 0; i < tokens.length; i += batchSize) {
+                            const batchTokens = tokens.slice(i, i + batchSize);
+                            if (batchTokens.length > 0) {
+                                await admin.messaging().sendEachForMulticast({
+                                    notification: {
+                                        title: 'Daily Fine Applied',
+                                        body: 'A fine of ₹5 has been added to your balance due to overdue payment.'
+                                    },
+                                    android: {
+                                        priority: 'high',
+                                        notification: {
+                                            channelId: 'high_importance_channel'
+                                        }
+                                    },
+                                    tokens: batchTokens
+                                });
+                            }
+                        }
+                        console.log(`Sent Fine FCM to ${tokens.length} devices.`);
+                    }
                 }
             } catch (error) {
                 console.error('Error applying daily fines:', error);

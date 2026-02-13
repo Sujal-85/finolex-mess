@@ -21,7 +21,10 @@ class NotificationModel {
     return NotificationModel(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       title: json['title'] as String? ?? 'No Title',
-      description: json['description'] as String? ?? 'No Description',
+      description:
+          json['message'] as String? ??
+          json['description'] as String? ??
+          'No Description',
       timestamp: DateTime.parse(
         json['timestamp'] ??
             json['createdAt'] ??

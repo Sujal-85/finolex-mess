@@ -28,6 +28,8 @@ import '../widgets/bottom_nav_bar.dart';
 import '../theme/animations.dart';
 import '../screens/mess_rules_screen.dart';
 import '../screens/rebate_calculator_screen.dart';
+import '../screens/attendance_screen.dart';
+import '../screens/web_login_screen.dart';
 
 class AppRouter {
   static final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -43,6 +45,24 @@ class AppRouter {
           key: state.pageKey,
           child: const SplashScreen(),
         ),
+      ),
+      GoRoute(
+        path: '/web-login',
+        pageBuilder: (context, state) {
+          final extra = state.extra;
+          final params = extra is Map ? extra : <String, dynamic>{};
+
+          return AppAnimations.transitionPage(
+            key: state.pageKey,
+            child: WebLoginScreen(
+              email: params['email']?.toString() ?? '',
+              password: params['password']?.toString() ?? '',
+              targetUrl:
+                  params['targetUrl']?.toString() ??
+                  'https://prasanna-caterers.vercel.app/login',
+            ),
+          );
+        },
       ),
       GoRoute(
         path: '/onboarding',
@@ -104,6 +124,13 @@ class AppRouter {
                 pageBuilder: (context, state) => AppAnimations.transitionPage(
                   key: state.pageKey,
                   child: const DashboardScreen(),
+                ),
+              ),
+              GoRoute(
+                path: '/attendance',
+                pageBuilder: (context, state) => AppAnimations.transitionPage(
+                  key: state.pageKey,
+                  child: const AttendanceScreen(),
                 ),
               ),
             ],

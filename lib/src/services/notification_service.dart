@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
 import '../services/local_notification_service.dart';
+import '../services/local_notification_storage.dart';
 
 class NotificationService extends ChangeNotifier {
   List<NotificationModel> _notifications = [];
@@ -37,6 +38,9 @@ class NotificationService extends ChangeNotifier {
 
   Future<void> fetchNotifications({bool checkForNew = false}) async {
     try {
+      // Check for missed scheduled notifications (Simulated History)
+      await _checkMissedMealNotifications();
+
       // Get current user ID
       final prefs = await SharedPreferences.getInstance();
       final userStr = prefs.getString('auth_user');
@@ -51,23 +55,104 @@ class NotificationService extends ChangeNotifier {
         queryParameters: userId != null ? {'userId': userId} : null,
       );
 
+      List<NotificationModel> apiNotifications = [];
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
-        final newNotifications = data
+        apiNotifications = data
             .map((json) => NotificationModel.fromJson(json))
-            .where((n) => n.type != NotificationType.deviceOnly)
+            .where((n) {
+              final isProfileUpdate =
+                  n.title.toLowerCase().contains('profile updated') ||
+                  n.description.toLowerCase().contains('profile updated') ||
+                  n.title.toLowerCase().contains('student updated') ||
+                  n.description.toLowerCase().contains('student updated');
+              return n.type != NotificationType.deviceOnly && !isProfileUpdate;
+            })
             .toList();
-
-        if (checkForNew && _notifications.isNotEmpty) {
-          _checkForNewAndNotify(newNotifications);
-        }
-
-        _notifications = newNotifications;
-        notifyListeners();
       }
+
+      // Merge with Local Notifications
+      final localNotifications = await LocalNotificationStorage()
+          .getLocalNotifications();
+
+      // Combine and Sort
+      final combined = [...apiNotifications, ...localNotifications]
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Newest first
+
+      // Deduplicate by ID
+      final uniqueNotifications = <String, NotificationModel>{};
+      for (var n in combined) {
+        uniqueNotifications[n.id] = n;
+      }
+
+      final finalAttributes = uniqueNotifications.values.toList()
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      if (checkForNew && _notifications.isNotEmpty) {
+        await _checkForNewAndNotify(finalAttributes);
+      }
+
+      _notifications = finalAttributes;
+      notifyListeners();
     } catch (e) {
       debugPrint('Error fetching notifications: $e');
+      // Even if API fails, load local
+      final localNotifications = await LocalNotificationStorage()
+          .getLocalNotifications();
+      _notifications = localNotifications
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      notifyListeners();
     }
+  }
+
+  Future<void> _checkMissedMealNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastCheck = prefs.getInt('last_meal_check_time') ?? 0;
+    final now = DateTime.now();
+
+    // Only run if we haven't checked in the last hour to avoid duplicates on hot restart
+    if (now.millisecondsSinceEpoch - lastCheck < 3600000) return;
+
+    final today8am = DateTime(now.year, now.month, now.day, 8, 0);
+    final today1250pm = DateTime(now.year, now.month, now.day, 12, 50);
+    final today730pm = DateTime(now.year, now.month, now.day, 19, 30);
+
+    await prefs.setInt('last_meal_check_time', now.millisecondsSinceEpoch);
+
+    final storage = LocalNotificationStorage();
+
+    // Helper to add if time passed
+    Future<void> addIfPassed(DateTime time, String title, String body) async {
+      if (now.isAfter(time)) {
+        // Check if we already have this notification for today to prevent dups
+        // This is a simple heuristic
+        final list = await storage.getLocalNotifications();
+        final alreadyExists = list.any((n) {
+          final isSameTitle = n.title == title;
+          final isToday =
+              n.timestamp.year == now.year &&
+              n.timestamp.month == now.month &&
+              n.timestamp.day == now.day;
+          return isSameTitle && isToday;
+        });
+
+        if (!alreadyExists) {
+          await storage.saveNotification(
+            title: title,
+            body: body,
+            type: NotificationType.mess,
+          );
+        }
+      }
+    }
+
+    await addIfPassed(today8am, 'Good Morning ☀️', 'Breakfast is ready!');
+    await addIfPassed(
+      today1250pm,
+      'Lunch Time 🍛',
+      'Lunch is served! Don’t miss it.',
+    );
+    await addIfPassed(today730pm, 'Dinner Time 🌙', 'Dinner is ready!');
   }
 
   Future<void> _checkForNewAndNotify(
@@ -123,6 +208,11 @@ class NotificationService extends ChangeNotifier {
           );
           continue; // Skip showing this notification
         }
+      }
+
+      // Prevent re-notifying for old items (e.g. history loaded on app launch)
+      if (DateTime.now().difference(item.timestamp).inMinutes.abs() > 10) {
+        continue;
       }
 
       if (item.isNew || item.type == NotificationType.urgent) {
@@ -202,20 +292,27 @@ class NotificationService extends ChangeNotifier {
     }).toList();
     notifyListeners();
 
-    // 2. API Calls (Sync)
-    // ideal: add a bulk update endpoint. For now, loop.
-    for (final id in unreadIds) {
-      try {
-        await ApiService().patch('/notifications/$id/read');
-      } catch (e) {
-        debugPrint('Error marking notification $id as read: $e');
-      }
-    }
+    // 2. API Calls (Parallel)
+    debugPrint('Marking ${unreadIds.length} notifications as read...');
+
+    // Execute all requests in parallel to prevent polling race conditions
+    await Future.wait(
+      unreadIds.map((id) async {
+        try {
+          await ApiService().patch('/notifications/$id/read');
+        } catch (e) {
+          debugPrint('Error marking notification $id as read: $e');
+        }
+      }),
+    );
+    debugPrint('All notifications marked as read successfully.');
   }
 
-  void deleteNotification(String id) {
+  Future<void> deleteNotification(String id) async {
     _notifications.removeWhere((notification) => notification.id == id);
     notifyListeners();
+    // Also remove from local storage if present
+    await LocalNotificationStorage().deleteNotification(id);
   }
 
   int getUnreadCount() {

@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
         // Notify users about new menu item
         const notification = new Notification({
             title: 'Menu Updated 🍽️',
-            description: `${newItem.name} has been added to the ${newItem.category} menu.`,
+            message: `${newItem.name} has been added to the ${newItem.category} menu.`,
             type: 'mess',
             isNew: true
         });
@@ -66,7 +66,7 @@ router.patch('/:id', async (req, res) => {
         // Notify users about menu update (Optional: prevent spam by checking if meaningful fields changed)
         const notification = new Notification({
             title: 'Menu Updated 🍽️',
-            description: `${item.name} has been updated. Check today's menu!`,
+            message: `${item.name} has been updated. Check today's menu!`,
             type: 'mess',
             isNew: true
         });

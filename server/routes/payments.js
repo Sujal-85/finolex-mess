@@ -3,36 +3,156 @@ const router = express.Router();
 const Transaction = require('../models/Transaction');
 const Student = require('../models/Student');
 const Notification = require('../models/Notification');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+
+// Razorpay Instance
+const razorpay = new Razorpay({
+    key_id: 'rzp_test_SBN8qqqrYVLeS7',
+    key_secret: 'GrJwhFudpL4Xu8PCfTmvbvLt'
+});
+
+// Helper to approve transaction
+async function approveTransaction(transaction, studentId, amount) {
+    const student = await Student.findById(studentId);
+    if (!student) return;
+
+    student.balance -= amount;
+
+    if (student.activePlans && student.activePlans.length > 0) {
+        let remainingPayment = amount;
+        const pendingPlans = student.activePlans
+            .filter(p => p.status === 'pending')
+            .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+        for (let plan of pendingPlans) {
+            if (remainingPayment >= plan.price) {
+                plan.status = 'paid';
+                remainingPayment -= plan.price;
+            } else {
+                break;
+            }
+        }
+    }
+
+    if (student.balance <= 0) {
+        student.paymentStatus = 'paid';
+        try {
+            await Notification.deleteMany({
+                recipient: student._id,
+                title: { $in: ['Payment Pending ⚠️', 'Daily Fine Applied'] }
+            });
+        } catch (err) {
+            console.error('Error removing stale notifications:', err);
+        }
+    } else {
+        student.paymentStatus = 'pending';
+    }
+
+    await student.save();
+
+    const title = student.balance <= 0 ? 'Payment Done Thank You! 🎉' : 'Payment Approved ✅';
+    const description = student.balance <= 0
+        ? 'Payment is done thank you. Your mess fees are fully paid.'
+        : `Your payment of ₹${amount} has been approved. Remaining Dues: ₹${student.balance.toFixed(2)}.`;
+
+    const notification = new Notification({
+        recipient: student._id,
+        title: title,
+        message: description,
+        type: 'payment'
+    });
+    await notification.save();
+}
+
+
+
+// Create Razorpay Order
+router.post('/create-order', async (req, res) => {
+    try {
+        const { amount } = req.body;
+        const options = {
+            amount: amount * 100, // amount in the smallest currency unit (paise)
+            currency: "INR",
+            receipt: "receipt_" + Date.now(),
+        };
+
+        const order = await razorpay.orders.create(options);
+        res.json(order);
+    } catch (error) {
+        console.error('Create Order Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Verify Razorpay Payment
+router.post('/verify-payment', async (req, res) => {
+    try {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, studentId, amount } = req.body;
+
+        const generated_signature = crypto
+            .createHmac('sha256', 'GrJwhFudpL4Xu8PCfTmvbvLt')
+            .update(razorpay_order_id + "|" + razorpay_payment_id)
+            .digest('hex');
+
+        if (generated_signature === razorpay_signature) {
+            // Payment Success
+            const transaction = new Transaction({
+                studentId,
+                amount,
+                status: 'Success',
+                receiptUrl: '', // Can be updated if needed
+                paymentMethod: 'Razorpay',
+                upiId: razorpay_payment_id // Storing payment ID here
+            });
+            await transaction.save();
+
+            await approveTransaction(transaction, studentId, amount);
+
+            res.json({ message: 'Payment verified successfully', status: 'Success' });
+        } else {
+            res.status(400).json({ message: 'Invalid Signature', status: 'Failed' });
+        }
+    } catch (error) {
+        console.error('Verify Payment Error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
 
 // Manual UPI Payment
 router.post('/manual-upi', async (req, res) => {
     try {
         const { studentId, amount, receiptUrl, upiId } = req.body;
+        const isDirect = upiId === 'UPI_INTENT';
 
         // Save Transaction
         const transaction = new Transaction({
             studentId,
             amount,
-            status: 'Pending',
+            status: isDirect ? 'Success' : 'Pending',
             receiptUrl,
-            paymentMethod: 'UPI_Manual',
+            paymentMethod: isDirect ? 'UPI_Direct' : 'UPI_Manual',
             upiId
         });
         await transaction.save();
 
-        // Create Notification for Submission
+        if (isDirect) {
+            await approveTransaction(transaction, studentId, amount);
+            return res.json({ message: 'Payment successful and recorded', status: 'Success' });
+        }
+
+        // Create Notification for Submission (QR Scan only)
         const notification = new Notification({
-            userId: studentId,
+            recipient: studentId,
             title: 'Payment Submitted ⏳',
-            description: `Your payment of ₹${amount} is pending approval.`,
+            message: `Your payment of ₹${amount} is pending approval.`,
             type: 'payment'
         });
         await notification.save();
 
-        // Note: Balance is NOT updated here. It will be updated by admin upon approval.
-
         res.json({ message: 'Payment submitted for review', status: 'Pending' });
     } catch (error) {
+        console.error('Manual UPI Error:', error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -77,109 +197,7 @@ router.put('/update-status', async (req, res) => {
 
             // If approved, update student balance and notify
             if (status === 'Success') {
-                const student = await Student.findById(transaction.studentId);
-                if (student) {
-                    // Update Balance (Logic: Balance is DEBT. Payment reduces DEBT.)
-                    // student.balance -= transaction.amount; // Old logic? No, balance was debt.
-                    // Wait, previous logic was `student.balance += transaction.amount` which implies balance was "Amount Paid" or "Wallet".
-                    // BUT we just switched to "Balance = Debt".
-                    // So if Balance is Debt (e.g., 3500), and I pay 3500, Balance should become 0.
-                    // So: student.balance -= transaction.amount;
-
-                    // HOWEVER, we are now using `activePlans` as source of truth.
-                    // We need to allocate this payment to the oldest 'pending' plans.
-
-                    let remainingPayment = transaction.amount;
-
-                    // Sort pending plans by date (oldest first)
-                    if (student.activePlans && student.activePlans.length > 0) {
-                        const pendingPlans = student.activePlans
-                            .filter(p => p.status === 'pending')
-                            .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-
-                        for (let plan of pendingPlans) {
-                            if (remainingPayment >= plan.price) {
-                                plan.status = 'paid';
-                                remainingPayment -= plan.price;
-                                console.log(`[Payment] Cleared plan: ${plan.name} (${plan.price})`);
-                            } else {
-                                // Partial payment? 
-                                // For now, we only mark as paid if fully covered?
-                                // Or do we enable partial status?
-                                // Let's simplify: Only mark 'paid' if fully covered.
-                                // Remaining payment just reduces the "Balance" field visually?
-                                // But next time we recalc balance index, it will sum active plans.
-                                // FIX: We need a "paidAmount" field in activePlans?
-                                // OR: Just trust `balance`.
-
-                                // If we rely on valid 'activePlans' status for reports, we MUST mark them paid.
-                                // If payment is partial, plan remains pending.
-                                break;
-                            }
-                        }
-                    }
-
-                    // Recalculate Balance
-                    // Balance = (Sum of Pending Plans) + Fines - (Any Unallocated Credit/Partial Payments)
-                    // This is getting complex.
-                    // Lets define: Balance = Current Outstanding Debt.
-
-                    // Simple approach for now:
-                    // 1. Reduce Balance by Amount.
-                    // 2. If Balance <= 0, mark ALL as paid? No, that's risky.
-
-                    // Better approach:
-                    // 1. Try to clear plans.
-                    // 2. Recalculate Balance = expectedSumOfPending - excessPayment
-
-                    const totalPendingDebt = student.activePlans
-                        .filter(p => p.status === 'pending')
-                        .reduce((sum, p) => sum + p.price, 0);
-
-                    // If we cleared plans, they are no longer in this sum.
-                    // If we have remainingPayment (partial for next plan or extra), subtract it.
-
-                    student.balance = totalPendingDebt - remainingPayment;
-
-                    // Check if fully paid
-                    const remainingDues = student.balance;
-
-                    let title = 'Payment Approved ✅';
-                    let description = `Your payment of ₹${transaction.amount} has been approved. Remaining Dues: ₹${remainingDues.toFixed(2)}.`;
-
-                    if (remainingDues <= 0) {
-                        student.paymentStatus = 'paid';
-                        student.fineAmount = 0; // Clear fines
-
-                        title = 'Payment Done Thank You! 🎉';
-                        description = 'Payment is done thank you. Your mess fees are fully paid.';
-
-                        // CLEANUP: Remove "Pending Payment" and "Fine" notifications
-                        try {
-                            await Notification.deleteMany({
-                                userId: student._id,
-                                title: { $in: ['Payment Pending ⚠️', 'Daily Fine Applied'] }
-                            });
-                        } catch (err) {
-                            console.error('Error removing stale notifications:', err);
-                        }
-                    } else {
-                        student.paymentStatus = 'pending';
-                    }
-
-                    await student.save();
-
-                    // Create Notification
-                    const Notification = require('../models/Notification');
-
-                    const notification = new Notification({
-                        userId: student._id,
-                        title: title,
-                        description: description,
-                        type: 'payment'
-                    });
-                    await notification.save();
-                }
+                await approveTransaction(transaction, transaction.studentId, transaction.amount);
             }
         }
 

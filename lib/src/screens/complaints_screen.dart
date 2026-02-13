@@ -1041,7 +1041,6 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
 
   Widget _buildInputArea() {
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface(context),
         borderRadius: const BorderRadius.only(
@@ -1056,74 +1055,80 @@ class _ComplaintsScreenState extends State<ComplaintsScreen>
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // Attachment button
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                _showAttachmentOptions = !_showAttachmentOptions;
-              });
-            },
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: NeumorphicStyle.cardDecoration(
-                context,
-                borderRadius: 22,
-              ),
-              child: const Icon(Icons.add, color: AppColors.primary),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Message input
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: NeumorphicStyle.cardDecoration(
-                context,
-                borderRadius: 25,
-              ),
-              child: TextField(
-                controller: _messageController,
-                focusNode: _messageFocusNode,
-                maxLines: null,
-                minLines: 1,
-                keyboardType: TextInputType.multiline,
-                style: GoogleFonts.roboto(
-                  fontSize: 16,
-                  color: AppColors.textPrimary(context),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Attachment button
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _showAttachmentOptions = !_showAttachmentOptions;
+                  });
+                },
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: NeumorphicStyle.cardDecoration(
+                    context,
+                    borderRadius: 22,
+                  ),
+                  child: const Icon(Icons.add, color: AppColors.primary),
                 ),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Type a message...',
-                  hintStyle: GoogleFonts.roboto(
-                    fontSize: 16,
-                    color: AppColors.textSecondaryLight.withOpacity(0.7),
+              ),
+              const SizedBox(width: 12),
+
+              // Message input
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: NeumorphicStyle.cardDecoration(
+                    context,
+                    borderRadius: 25,
+                  ),
+                  child: TextField(
+                    controller: _messageController,
+                    focusNode: _messageFocusNode,
+                    maxLines: null,
+                    minLines: 1,
+                    keyboardType: TextInputType.multiline,
+                    style: GoogleFonts.roboto(
+                      fontSize: 16,
+                      color: AppColors.textPrimary(context),
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Type a message...',
+                      hintStyle: GoogleFonts.roboto(
+                        fontSize: 16,
+                        color: AppColors.textSecondaryLight.withOpacity(0.7),
+                      ),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
-                onSubmitted: (_) => _sendMessage(),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-          // Send button
-          GestureDetector(
-            onTap: _sendMessage,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: NeumorphicStyle.buttonDecoration(
-                context,
-                borderRadius: 22,
-                color: AppColors.primary,
+              // Send button
+              GestureDetector(
+                onTap: _sendMessage,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: NeumorphicStyle.buttonDecoration(
+                    context,
+                    borderRadius: 22,
+                    color: AppColors.primary,
+                  ),
+                  child: const Icon(Icons.send, color: Colors.white),
+                ),
               ),
-              child: const Icon(Icons.send, color: Colors.white),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

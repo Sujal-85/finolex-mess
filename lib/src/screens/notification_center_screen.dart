@@ -28,9 +28,14 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
     _tabController = TabController(length: 5, vsync: this);
 
     // Auto-mark all as read when screen opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
-        context.read<NotificationService>().markAllAsRead();
+        await context.read<NotificationService>().fetchNotifications(
+          checkForNew: true,
+        );
+        if (mounted) {
+          await context.read<NotificationService>().markAllAsRead();
+        }
       }
     });
   }
@@ -407,26 +412,26 @@ class _NotificationCenterScreenState extends State<NotificationCenterScreen>
                           color: AppColors.textSecondaryLight,
                         ),
                       ),
-                      if (notification.isNew)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'New',
-                            style: GoogleFonts.poppins(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                      // if (notification.isNew)
+                      //   Container(
+                      //     margin: const EdgeInsets.only(left: 8),
+                      //     padding: const EdgeInsets.symmetric(
+                      //       horizontal: 6,
+                      //       vertical: 2,
+                      //     ),
+                      //     decoration: BoxDecoration(
+                      //       color: AppColors.accent,
+                      //       borderRadius: BorderRadius.circular(6),
+                      //     ),
+                      //     child: Text(
+                      //       'New',
+                      //       style: GoogleFonts.poppins(
+                      //         fontSize: 10,
+                      //         fontWeight: FontWeight.w600,
+                      //         color: Colors.white,
+                      //       ),
+                      //     ),
+                      //   ),
                     ],
                   ),
                 ],

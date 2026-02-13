@@ -5,6 +5,7 @@ import '../../theme/colors.dart';
 import '../../theme/neumorphism.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/profile_style_header.dart';
+import '../../utils/error_strings.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -84,7 +85,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(ErrorMessages.humanize(e)),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }

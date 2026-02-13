@@ -1,16 +1,16 @@
 const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema({
-    userId: {
+    recipient: { // CHANGED: userId -> recipient
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
+        ref: 'Student', // It links to Student usually
         required: false // Can be null for global notifications
     },
     title: {
         type: String,
         required: true
     },
-    description: {
+    message: { // CHANGED: description -> message
         type: String,
         required: true
     },

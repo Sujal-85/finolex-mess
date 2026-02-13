@@ -142,7 +142,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             '/notifications?userId=${user!['id']}',
           );
           final notifications = notifResponse.data as List;
-          unreadCount = notifications.where((n) => !n['isRead']).length;
+          unreadCount = notifications.where((n) {
+            final isRead = n['isRead'] ?? !(n['isUnread'] ?? true);
+            return !isRead;
+          }).length;
         } catch (e) {
           print('Error fetching notifications: $e');
         }
@@ -288,16 +291,20 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final allNotifications = List<Map<String, dynamic>>.from(response.data);
 
       // Handle Device Only Notifications (System Reminders)
-      final deviceOnlyNotifications = allNotifications
-          .where((n) => n['type'] == 'device_only' && !n['isRead'])
-          .toList();
+      final deviceOnlyNotifications = allNotifications.where((n) {
+        final isRead = n['isRead'] ?? !(n['isUnread'] ?? true);
+        return n['type'] == 'device_only' && !isRead;
+      }).toList();
 
       if (deviceOnlyNotifications.isNotEmpty) {
         for (var notif in deviceOnlyNotifications) {
           _notificationService.showNotification(
             id: DateTime.now().millisecond,
             title: notif['title'] ?? 'Reminder',
-            body: notif['description'] ?? 'Check your payment status.',
+            body:
+                notif['message'] ??
+                notif['description'] ??
+                'Check your payment status.',
           );
           // Mark as read immediately to prevent re-triggering
           try {
@@ -312,9 +319,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final visibleNotifications = allNotifications
           .where((n) => n['type'] != 'device_only')
           .toList();
-      final unreadCount = visibleNotifications
-          .where((n) => !n['isRead'])
-          .length;
+      final unreadCount = visibleNotifications.where((n) {
+        final isRead = n['isRead'] ?? !(n['isUnread'] ?? true);
+        return !isRead;
+      }).length;
 
       // Check for new visible notifications to trigger local alert for them too
       if (unreadCount > currentState.unreadNotifications) {
@@ -326,7 +334,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           _notificationService.showNotification(
             id: DateTime.now().millisecond,
             title: newNotif['title'] ?? 'New Notification',
-            body: newNotif['description'] ?? 'You have a new update.',
+            body:
+                newNotif['message'] ??
+                newNotif['description'] ??
+                'You have a new update.',
           );
 
           // If payment related, refresh critical data immediately

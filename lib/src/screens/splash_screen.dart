@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_service.dart';
 
@@ -60,9 +61,48 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (isLoggedIn) {
-      context.go('/home');
+      final user = await _authService.getUser();
+
+      // Check for Admin/Manager Bypass
+      if (user != null && user['id'] == 'admin_bypass') {
+        // Retrieve persisted password
+        final prefs =
+            await SharedPreferences.getInstance(); // Import shared_preferences if needed
+        final password = prefs.getString('bypass_password');
+        final email = user['email'];
+
+        if (password != null && email != null) {
+          if (mounted) {
+            String targetUrl = 'https://prasanna-caterers.vercel.app/login';
+            if (email == 'admin@famt.com') {
+              // Changed to /admin/orders
+              targetUrl = 'https://prasanna-caterers.vercel.app/admin/orders';
+            }
+
+            context.go(
+              '/web-login',
+              extra: {
+                'email': email,
+                'password': password,
+                'targetUrl': targetUrl,
+              },
+            );
+          }
+          return;
+        } else {
+          // If manager/admin but password is lost (key not found), force re-login
+          if (mounted) {
+            // Optional: Clear session? AuthService().logout() might be needed but sync is tricky here.
+            // Just sending to login will let them overwrite the session on next successful login.
+            context.go('/login');
+          }
+          return;
+        }
+      }
+
+      if (mounted) context.go('/home');
     } else {
-      context.go('/onboarding');
+      if (mounted) context.go('/onboarding');
     }
   }
 

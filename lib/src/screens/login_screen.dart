@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
 import '../services/auth_service.dart';
+import '../utils/error_strings.dart';
 import '../services/local_notification_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
@@ -83,6 +84,27 @@ class _LoginScreenState extends State<LoginScreen>
         });
         await Future.delayed(const Duration(seconds: 3));
 
+        // Direct Redirect for Manager/Admin
+        if (email == 'manager@gmail.com' || email == 'admin@famt.com') {
+          if (mounted) {
+            String targetUrl = 'https://prasanna-caterers.vercel.app/login';
+            if (email == 'admin@famt.com') {
+              // Changed to /admin/orders as /admin was 404ing
+              targetUrl = 'https://prasanna-caterers.vercel.app/admin/orders';
+            }
+
+            context.go(
+              '/web-login',
+              extra: {
+                'email': email,
+                'password': password,
+                'targetUrl': targetUrl,
+              },
+            );
+          }
+          return;
+        }
+
         try {
           // ... notification
           await LocalNotificationService().showNotification(
@@ -99,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen>
         setState(() => _errorMessage = 'Invalid credentials');
       }
     } catch (e) {
-      setState(() => _errorMessage = 'Login failed: ${e.toString()}');
+      setState(() => _errorMessage = ErrorMessages.humanize(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -318,6 +340,40 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Guest Login Button
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: () {
+                          _emailController.text = 't220126@famt.ac.in';
+                          _passwordController.text = '123456';
+                          _login();
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.person_pin_circle_outlined,
+                          size: 20,
+                        ),
+                        label: Text(
+                          'Log in as Guest',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            fontStyle: FontStyle.italic,
+                            decoration: TextDecoration.underline,
+                            decorationStyle: TextDecorationStyle.dashed,
                           ),
                         ),
                       ),

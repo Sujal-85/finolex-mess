@@ -115,6 +115,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             profileImage: user['profileImage'],
             messFee: messFee,
             fineAmount: (user['fineAmount'] ?? 0).toDouble(),
+            year: user['year'] ?? 'N/A',
           );
 
           // Fetch transactions to calculate real-time pending amount
@@ -189,6 +190,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             lastPaymentDate: lastPaymentDate,
             pendingAmount: pending,
             profileImage: _userProfile!.profileImage,
+            year: _userProfile!.year,
           );
         });
       }
@@ -620,6 +622,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             icon: Icons.person_outline,
             children: [
               _buildInfoRow('Full Name', _userProfile?.name ?? ''),
+              _buildInfoRow('Academic Year', _userProfile?.year ?? 'N/A'),
               _buildInfoRow('Email', _userProfile?.email ?? ''),
               _buildInfoRow('Phone Number', _userProfile?.phone ?? ''),
               _buildInfoRow(
@@ -1672,6 +1675,7 @@ class UserProfile {
   final String? profileImage;
   final double messFee;
   final double fineAmount;
+  final String year;
 
   UserProfile({
     required this.name,
@@ -1690,6 +1694,7 @@ class UserProfile {
     this.profileImage,
     this.messFee = 3500.0,
     this.fineAmount = 0.0,
+    this.year = 'N/A',
   });
 }
 

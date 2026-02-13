@@ -2,6 +2,11 @@ const mongoose = require('mongoose');
 
 const studentSchema = new mongoose.Schema({
     name: { type: String, required: true },
+    year: {
+        type: String,
+        enum: ['First Year', '2nd Year', '3rd Year', '4th Year'],
+        required: false
+    },
     email: { type: String, required: true, unique: true },
     phone: { type: String },
     password: { type: String, required: true }, // Should be hashed
@@ -36,6 +41,12 @@ const studentSchema = new mongoose.Schema({
     fineAmount: { type: Number, default: 0 },
     monthlyFee: { type: Number, default: 3500 },
     lastPaymentResetDate: { type: Date }, // To track when we last renewed the month
+
+    // App Settings
+    settings: {
+        messAlerts: { type: Boolean, default: true },
+        pushNotifications: { type: Boolean, default: true }
+    },
 
     createdAt: {
         type: Date,

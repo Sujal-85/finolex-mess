@@ -82,6 +82,15 @@ class ApiService {
     }
   }
 
+  // Generic DELETE
+  Future<Response> delete(String path, {dynamic data}) async {
+    try {
+      return await _dio.delete(path, data: data);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<Response> updateFcmToken(String token) async {
     try {
       final prefs = await SharedPreferences.getInstance();

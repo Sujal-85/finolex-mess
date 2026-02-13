@@ -53,7 +53,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     return Column(
       children: [
         SizedBox(
-          height: 160,
+          height: 220,
           child: PageView.builder(
             controller: _pageController,
             onPageChanged: (index) {
@@ -148,7 +148,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                             color: AppColors.textSecondaryLight,
                             height: 1.5,
                           ),
-                          maxLines: 2,
+                          maxLines: 5,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],

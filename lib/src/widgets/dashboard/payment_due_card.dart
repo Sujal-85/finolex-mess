@@ -77,6 +77,48 @@ class PaymentDueCard extends StatelessWidget {
       );
     }
 
+    // 1. Filter and Sort Unpaid Plans (Queue Logic)
+    List<Map<String, dynamic>> unpaidPlans = activePlans.where((p) {
+      final status = p['status']?.toString().toLowerCase();
+      return status != 'paid' && status != 'Success';
+    }).toList();
+
+    // Sort by Date (Oldest First)
+    unpaidPlans.sort((a, b) {
+      DateTime? d1 = DateTime.tryParse(a['startDate']?.toString() ?? '');
+      DateTime? d2 = DateTime.tryParse(b['startDate']?.toString() ?? '');
+      if (d1 == null) return 1;
+      if (d2 == null) return -1;
+      return d1.compareTo(d2);
+    });
+
+    final topPlan = unpaidPlans.isNotEmpty ? unpaidPlans.first : null;
+
+    // 2. Determine Display Values from Top Plan
+    DateTime? displayStart = startDate;
+    DateTime? displayEnd = endDate;
+    String displayDueDate = dueDate;
+
+    if (topPlan != null && topPlan['startDate'] != null) {
+      final sDate = DateTime.tryParse(topPlan['startDate'].toString());
+      final eDate = DateTime.tryParse(topPlan['endDate'].toString());
+
+      if (sDate != null) {
+        displayStart = sDate;
+        // Due Date = Start Date + 10 Days
+        final calculatedDue = sDate.add(const Duration(days: 10));
+        displayDueDate =
+            '${calculatedDue.day}th ${_getMonthName(calculatedDue.month)}';
+      }
+      if (eDate != null) {
+        displayEnd = eDate;
+      }
+    }
+
+    // Reuse helper if needed or just format locally
+    // Since we don't have intl here easily without importing, simple month map or just existing format style.
+    // The existing code passed 'dueDate' as a string. We constructed a new string.
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -124,9 +166,11 @@ class PaymentDueCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text('Total Outstanding', style: GoogleFonts.roboto(fontSize: 12)),
           const SizedBox(height: 4),
-          if (startDate != null) ...[
+
+          // Display Validity from Top Plan
+          if (displayStart != null) ...[
             Text(
-              'Validity: ${startDate!.day}/${startDate!.month} to ${endDate != null ? "${endDate!.day}/${endDate!.month}" : "---"}',
+              'Validity: ${displayStart.day}/${displayStart.month} to ${displayEnd != null ? "${displayEnd.day}/${displayEnd.month}" : "---"}',
               style: GoogleFonts.roboto(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
@@ -135,6 +179,7 @@ class PaymentDueCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
           ],
+
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -148,52 +193,78 @@ class PaymentDueCard extends StatelessWidget {
               ),
             ),
           ),
-          if (fineAmount > 0) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(
-                  Icons.info_outline,
-                  size: 14,
-                  color: AppColors.error,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Includes ₹$fineAmount Late Fine',
-                  style: GoogleFonts.roboto(
-                    fontSize: 12,
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (activePlans.isNotEmpty) ...[
+
+          // Removed "Includes Fine" specific breakout since fine is now part of balance directly
+          // We can show generic message if balance > plan price? But simplicity is preferred.
+          if (unpaidPlans.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Divider(),
             Text(
-              'Active Plans:',
+              'Unpaid Plans Queue:',
               style: GoogleFonts.roboto(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 4),
-            ...activePlans.map((plan) {
+            // Show Top Plan Highlighted
+            ...unpaidPlans.map((plan) {
               final pName = plan['name'] ?? 'Mess Plan';
               final pPrice = plan['price'] ?? 0;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 2.0),
+              final pStartDate = plan['startDate'];
+              // If this plan matches the topPlan we identified earlier
+              final isTop = topPlan == plan;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 4.0),
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                decoration: isTop
+                    ? BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: AppColors.error.withOpacity(0.2),
+                        ),
+                      )
+                    : null,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(pName, style: GoogleFonts.roboto(fontSize: 12)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            pName,
+                            style: GoogleFonts.roboto(
+                              fontSize: 12,
+                              fontWeight: isTop
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isTop
+                                  ? AppColors.error
+                                  : AppColors.textPrimary(context),
+                            ),
+                          ),
+                          if (pStartDate != null)
+                            Text(
+                              'Start: ${DateTime.tryParse(pStartDate.toString())?.day}/${DateTime.tryParse(pStartDate.toString())?.month}',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                     Text(
                       '₹$pPrice',
                       style: GoogleFonts.roboto(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
+                        color: isTop
+                            ? AppColors.error
+                            : AppColors.textPrimary(context),
                       ),
                     ),
                   ],
@@ -235,7 +306,7 @@ class PaymentDueCard extends StatelessWidget {
           if (amount > 0) ...[
             const SizedBox(height: 4),
             Text(
-              'Due by $dueDate',
+              'Due by $displayDueDate',
               style: GoogleFonts.roboto(
                 fontSize: 12,
                 color: AppColors.error,
@@ -274,5 +345,24 @@ class PaymentDueCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return '';
   }
 }

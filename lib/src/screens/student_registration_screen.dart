@@ -8,6 +8,7 @@ import '../widgets/animations/famt_loader.dart';
 import '../widgets/animations/success_confetti.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/cloudinary_service.dart';
+import '../utils/error_strings.dart';
 import '../theme/colors.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -47,6 +48,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   bool _showSuccess = false;
   XFile? _profileImage;
   DateTime? _selectedDate;
+  String? _selectedYear;
 
   // Toggles
   bool _obscurePassword = true;
@@ -137,7 +139,8 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'password': _passwordController.text,
-        'dob': _selectedDate?.toIso8601String(),
+        'dob': _selectedDate!.toIso8601String(),
+        'year': _selectedYear,
         'profileImage': imageUrl,
         'hostelDetails': {
           'isHostelite': true,
@@ -164,7 +167,10 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     } catch (e) {
       setState(() => _isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(ErrorMessages.humanize(e)),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }
@@ -572,7 +578,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
 
               // Navigation Buttons
               Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
                 color: AppColors.surface(context),
                 child: Row(
                   children: [
@@ -898,6 +904,48 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary(context),
                 ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedYear,
+                items: ['First Year', '2nd Year', '3rd Year', '4th Year'].map((
+                  year,
+                ) {
+                  return DropdownMenuItem<String>(
+                    value: year,
+                    child: Text(year),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedYear = value;
+                  });
+                },
+                decoration: InputDecoration(
+                  labelText: 'Academic Year',
+                  prefixIcon: Icon(
+                    Icons.school_outlined,
+                    color: AppColors.textSecondary(context),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surface(context),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.transparent),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: AppColors.textSecondary(context).withOpacity(0.2),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                ),
+                validator: (value) =>
+                    value == null ? 'Please select your academic year' : null,
               ),
               const SizedBox(height: 16),
               _buildTextField(
@@ -1261,7 +1309,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   ),
                 ),
                 subtitle: Text(
-                  'I agree to strictly follow the college mess guidelines.',
+                  'I agree to strictly follow the college mess guidelines.\n\nA daily increment of 5 Rs will be applied after 10 days of non-payment.',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColors.textSecondary(context),

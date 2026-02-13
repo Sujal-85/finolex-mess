@@ -37,9 +37,9 @@ router.patch('/:id', async (req, res) => {
         // Create notification for the student
         if (complaint && req.body.status) {
             const notification = new Notification({
-                userId: complaint.studentId, // Assuming studentId is the User ID
+                recipient: complaint.studentId, // Assuming studentId is the User ID
                 title: 'Complaint Update',
-                description: `Your complaint "${complaint.title}" has been updated to ${complaint.status}.`,
+                message: `Your complaint "${complaint.title}" has been updated to ${complaint.status}.`,
                 type: 'urgent'
             });
             await notification.save();

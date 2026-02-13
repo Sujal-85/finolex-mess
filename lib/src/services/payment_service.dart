@@ -73,4 +73,26 @@ class PaymentService {
       return [];
     }
   }
+
+  Future<Map<String, dynamic>> createRazorpayOrder(double amount) async {
+    try {
+      final response = await _api.post(
+        '/payments/create-order',
+        data: {'amount': amount},
+      );
+      return response.data;
+    } catch (e) {
+      debugPrint('Error creating Razorpay order: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> verifyRazorpayPayment(Map<String, dynamic> response) async {
+    try {
+      await _api.post('/payments/verify-payment', data: response);
+    } catch (e) {
+      debugPrint('Error verifying payment: $e');
+      rethrow;
+    }
+  }
 }

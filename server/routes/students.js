@@ -81,7 +81,7 @@ router.post('/login', async (req, res) => {
             console.log(`[Lazy Sync] Updated profile for ${student.name}. New Balance: ${student.balance}`);
         }
 
-        const token = jwt.sign({ id: student._id }, JWT_SECRET, { expiresIn: '1h' });
+        const token = jwt.sign({ id: student._id }, JWT_SECRET, { expiresIn: '30d' });
         res.json({
             token,
             student: {
@@ -90,6 +90,9 @@ router.post('/login', async (req, res) => {
                 email: student.email,
                 balance: student.balance,
                 profileImage: student.profileImage,
+                balance: student.balance,
+                profileImage: student.profileImage,
+                year: student.year,
                 activePlans: student.activePlans
             }
         });
@@ -194,7 +197,7 @@ router.get('/birthdays/today', async (req, res) => {
 // Create student (Signup)
 router.post('/', async (req, res) => {
     try {
-        let { name, email, password, phone, dob, profileImage, hostelDetails, isEmailVerified, isPhoneVerified } = req.body;
+        let { name, email, password, phone, dob, profileImage, hostelDetails, year, isEmailVerified, isPhoneVerified } = req.body;
 
         // Check if student exists (Email OR Phone)
         const existingStudent = await Student.findOne({ $or: [{ email }, { phone }] });
@@ -213,6 +216,7 @@ router.post('/', async (req, res) => {
             dob,
             profileImage,
             hostelDetails,
+            year,
             isEmailVerified,
             isPhoneVerified
         });
@@ -230,14 +234,20 @@ router.post('/', async (req, res) => {
 // Update student profile
 router.put('/:id', async (req, res) => {
     try {
-        const { name, email, phone, profileImage } = req.body;
+        const { name, email, phone, profileImage, settings } = req.body;
         const student = await Student.findById(req.params.id);
         if (!student) return res.status(404).json({ message: 'Student not found' });
 
         if (name) student.name = name;
         if (email) student.email = email;
         if (phone) student.phone = phone;
+        if (phone) student.phone = phone;
         if (profileImage) student.profileImage = profileImage;
+        if (req.body.year) student.year = req.body.year;
+        if (settings) {
+            // merge existing with new
+            student.settings = { ...student.settings, ...settings };
+        }
 
         const updatedStudent = await student.save();
         res.json({
@@ -280,6 +290,21 @@ router.post('/change-password', async (req, res) => {
         await student.save();
 
         res.json({ message: 'Password updated successfully' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Delete account
+router.delete('/:id', async (req, res) => {
+    try {
+        const student = await Student.findByIdAndDelete(req.params.id);
+        if (!student) return res.status(404).json({ message: 'Student not found' });
+
+        // Ideally, we should also delete related data (Notifications, Payments, etc.)
+        // For now, we are deleting the primary user record as requested.
+
+        res.json({ message: 'Account deleted successfully' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }

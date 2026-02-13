@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../theme/colors.dart';
 import '../theme/neumorphism.dart';
 import '../widgets/profile_style_header.dart';
+import '../utils/update_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -31,6 +32,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _user = user;
     });
+  }
+
+  Future<void> _showDeleteAccountDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Account?'),
+        content: const Text(
+          'This action cannot be undone. All your data including profile, payments, and history will be permanently deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      if (_user?['id'] == null && _user?['_id'] == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error: User ID not found')),
+        );
+        return;
+      }
+
+      final userId = _user!['id'] ?? _user!['_id'];
+
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final result = await _authService.deleteAccount(userId);
+
+      if (mounted) {
+        Navigator.pop(context); // Pop loading
+
+        if (result['success']) {
+          context.go('/login');
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(result['message'])));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result['message'] ?? 'Failed to delete')),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -96,7 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     if (settings.settings.pushNotifications) ...[
                       _buildSettingsTile(
-                        title: 'Mess Menu Alerts',
+                        title: 'Mess Timing Alerts',
                         icon: Icons.restaurant_menu_rounded,
                         iconColor: Colors.orange,
                         trailing: Switch(
@@ -131,6 +190,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     // Support
                     _buildSectionHeader('Support'),
                     _buildSettingsTile(
+                      title: 'Check for Updates',
+                      subtitle: 'Check if a newer version is available',
+                      icon: Icons.update_rounded,
+                      iconColor: Colors.blue,
+                      onTap: () => UpdateService.checkUpdate(context),
+                      showArrow: true,
+                    ),
+                    _buildSettingsTile(
                       title: 'Help & Support',
                       icon: Icons.headset_mic_rounded,
                       iconColor: Colors.green,
@@ -142,6 +209,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icons.info_outline_rounded,
                       iconColor: Colors.grey,
                       onTap: () => context.push('/about'),
+                      showArrow: true,
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    _buildSectionHeader('Danger Zone'),
+                    _buildSettingsTile(
+                      title: 'Delete Account',
+                      subtitle: 'Permanently remove your data',
+                      icon: Icons.delete_forever_rounded,
+                      iconColor: Colors.red,
+                      onTap: () => _showDeleteAccountDialog(context),
                       showArrow: true,
                     ),
 
